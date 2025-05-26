@@ -1,16 +1,15 @@
 from aiogram import Router, F
 from aiogram.filters import Command
-from bot.keybords.menu import get_menu
 from bot.config import START_MESSAGE, BUTTONS_DATA, CATEGORIES_DATA
-from aiogram.types import Message, FSInputFile, CallbackQuery, InlineKeyboardButton
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-from bot.keybords.catalog import build_category_keyboard, build_product_keyboard
+from aiogram.types import Message, FSInputFile, CallbackQuery
+from bot.keybords import build_category_keyboard, build_product_keyboard, get_menu
 
-
+#add different currency
 router = Router()
 
 @router.message(Command("start"))
 async def cmd_start(message: Message):
+
     photo_path = "bot/commands/start/start.jpg"
     # Open the file and send it
     await message.answer_photo(FSInputFile(path=photo_path),
@@ -20,7 +19,7 @@ async def cmd_start(message: Message):
 
 @router.callback_query(F.data.startswith("c_"))
 async def handle_category_selection(callback: CallbackQuery):
-    if callback.data == "c_0":
+    if len(callback.data.split("_")) == 2:
         # If the callback is for the main categories
         keyboard = await build_category_keyboard(CATEGORIES_DATA)
         await callback.message.edit_text(
@@ -49,18 +48,18 @@ async def handle_category_selection(callback: CallbackQuery):
             if key in category_data:
                 category_data = category_data[key]
             else:
-                await callback.answer("Category not found")
+                await callback.answer("Категория не найдена")
                 return
     
     if not category_data:
-        await callback.answer("Empty category")
+        await callback.answer("Пустая категория")
         return
-    
     keyboard = await build_category_keyboard(category_data, level+1, '_'.join(parts[2:]))
-    await callback.message.edit_text(
-        text=f"Select an item:",
+    await callback.message.answer(
+        text=f"Выберете из категории: {keys[-1].split('&', 1)[1] if '&' in keys[-1] else ''}",
         reply_markup=keyboard
     )
+    await callback.message.delete()
     await callback.answer()
 
 @router.callback_query(F.data.startswith("p_"))
@@ -83,20 +82,34 @@ async def handle_product_selection(callback: CallbackQuery):
         if key in product_data:
             product_data = product_data[key]
         else:
-            await callback.answer("Product not found")
+            await callback.answer("Продукт не найден")
             return
     
     product = product_data.get(product_id)
     if not product:
-        await callback.answer("Product not found")
+        await callback.answer("Продукт не найден")
         return
     # Create a keyboard with "Buy" button
-    await callback.message.edit_text(
-        text=f"{product_id.split('&', 1)[1] if '&' in product_id else product_id}\n\n"
-             f"💵 Цена: {product['amount']}₽\n\n"
-             f"📝 Описание:\n{product['description']}",
-        reply_markup=await build_product_keyboard(category_path_ids)
+    # Send product photo with caption and inline keyboard
+    photo_path = f"bot//{product.get('image_folder')}"
+    caption = (
+        f"{product_id.split('&', 1)[1] if '&' in product_id else product_id}\n\n"
+        f"💵 Цена: {product['amount']}₽\n\n"
+        f"📝 Описание:\n{product['description']}"
     )
+    if product.get('image_folder'):
+        await callback.message.answer_photo(
+            FSInputFile(path=photo_path),
+            caption=caption,
+            reply_markup=await build_product_keyboard(category_path_ids)
+        )
+        await callback.message.delete()
+    else:
+        await callback.message.answer(
+            text=caption,
+            reply_markup=await build_product_keyboard(category_path_ids)
+        )
+        await callback.message.delete()
     await callback.answer()
 
 @router.callback_query(F.data.startswith("b_"))

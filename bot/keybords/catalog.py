@@ -24,7 +24,7 @@ async def build_category_keyboard(category_data, level=0, parent_id=None):
             # This is a product
             callback_data = f"p_{parent_id}_{id}" if parent_id else f"p_{id}"
             builder.add(InlineKeyboardButton(
-                text=f"{display_name} - {item['amount']}₽",
+                text=display_name,
                 callback_data=callback_data
             ))
 
@@ -33,9 +33,7 @@ async def build_category_keyboard(category_data, level=0, parent_id=None):
     if level > 0:
         # Add a back button if we are not at the top level
         prev_page = parent_id.rsplit("_", 1)[0]
-        print(parent_id, "_" not in parent_id)
         back_callback_data = f"c_{level-1}_{prev_page}" if (parent_id and "_" in parent_id) else f"c_{level-1}"
-        print(f"Back callback data: {back_callback_data}, Level: {level}, Parent ID: {parent_id}")
         builder.add(InlineKeyboardButton(
             text="🔙 Назад",
             callback_data=back_callback_data
