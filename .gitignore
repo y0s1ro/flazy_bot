@@ -179,3 +179,12 @@ img/
 cfg/
 commands/
 
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db3
+*.sdb
+*.mdb
+*.accdb
+

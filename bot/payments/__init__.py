@@ -1,2 +1,2 @@
-import acquiring
-import crystalpay
+from . import acquiring
+from . import crystalpay
