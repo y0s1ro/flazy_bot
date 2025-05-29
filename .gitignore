@@ -178,6 +178,7 @@ cython_debug/
 img/
 cfg/
 commands/
+text/
 
 # Database files
 *.db

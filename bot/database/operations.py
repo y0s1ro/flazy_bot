@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import User, Order, TopUp
@@ -32,13 +32,15 @@ async def update_balance(session: AsyncSession, tg_id: int, amount: float) -> Us
         await session.commit()
     return user
 
-async def create_order(session: AsyncSession, tg_id: int, category: str, product_name: str, price: float) -> Order:
+async def create_order(session: AsyncSession, tg_id: int, category: str, product_name: str, amount: int, price: float) -> Order:
     """Create a new order for a user"""
     order = Order(
         tg_id=tg_id,
         category=category,
         product_name=product_name,
+        amount=amount,  # Default amount is 1
         price=price,
+        order_number=await get_next_order_number(session),
         created_at=datetime.utcnow()
     )
     session.add(order)
@@ -75,3 +77,9 @@ async def get_user_topups(session: AsyncSession, tg_id: int) -> list[TopUp]:
         .order_by(TopUp.created_at.desc())
     )
     return result.scalars().all()
+
+async def get_next_order_number(session: AsyncSession) -> int:
+    max_order_number = await session.scalar(
+        select(func.max(Order.order_number))
+    )
+    return (max_order_number or 1000) + 1

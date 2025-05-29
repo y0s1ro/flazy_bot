@@ -41,8 +41,15 @@ async def build_category_keyboard(category_data, level=0, parent_id=None):
     builder.adjust(3)
     return builder.as_markup()
 
-async def build_product_keyboard(category_path_ids):
+async def build_product_keyboard(category_path_ids, is_auto_product=False, num_of_products=None):
     builder = InlineKeyboardBuilder()
+    if is_auto_product:
+        # If it's an auto product, we don't show the "Buy" button
+        for i in range(num_of_products):
+            builder.add(InlineKeyboardButton(
+                text=f"{i+1} шт.",
+                callback_data=f"b_{'_'.join(category_path_ids)}_{category_path_ids[-1]}_{i+1}a"
+            ))
     builder.add(InlineKeyboardButton(
         text="🛒 Купить",
         callback_data=f"b_{'_'.join(category_path_ids)}_{category_path_ids[-1]}"

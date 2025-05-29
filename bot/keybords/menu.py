@@ -20,14 +20,14 @@ async def get_profile_buttons():
     
     return profile_menu.adjust(2).as_markup()
 
-async def get_topup_buttons(is_from_product=False, product_id = None,  amount=None):
+async def get_topup_buttons(is_from_product=False, product_id = None,  amount=None, callback_back=None):
     topup_menu = InlineKeyboardBuilder()
     
     if not is_from_product:
-        topup_menu.add(InlineKeyboardButton(text="Назад", callback_data="back_to_profile"))
+        topup_menu.add(InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_profile"))
     else:
-        topup_menu.add(InlineKeyboardButton(text=f"{amount}₽"))
-        topup_menu.add(InlineKeyboardButton(text="Назад", callback_data=product_id))
+        topup_menu.add(InlineKeyboardButton(text=f"{amount}₽", callback_data=f"topup_{amount}"))
+        topup_menu.add(InlineKeyboardButton(text="В каталог", callback_data=callback_back))
     
     return topup_menu.adjust(2).as_markup()
 

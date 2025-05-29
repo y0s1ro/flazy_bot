@@ -8,7 +8,9 @@ from .operations import (
     create_order,
     get_user_orders,
     create_topup,
-    get_user_topups
+    get_user_topups,
+    get_next_order_number
+
 )
 
 __all__ = [
@@ -26,4 +28,5 @@ __all__ = [
     'create_topup',
     'get_user_topups',
     'close_db',
+    'get_next_order_number'
 ]
