@@ -4,7 +4,7 @@ from bot.config import START_MESSAGE, BUTTONS_DATA, CATEGORIES_DATA
 from aiogram.types import Message, FSInputFile, CallbackQuery
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
-from bot.keybords import build_category_keyboard, build_product_keyboard, get_menu, get_profile_buttons, get_topup_buttons, get_payments_button, get_back_button
+from bot.keybords import build_category_keyboard, build_product_keyboard, get_menu, get_profile_buttons, get_topup_buttons, get_payments_button, get_back_button, build_region_keyboard
 from bot.database import get_session, get_or_create_user, get_user_orders, get_user_topups, update_balance, create_topup, create_order
 from bot.payments import acquiring, crystalpay
 import uuid
@@ -108,11 +108,18 @@ async def handle_product_selection(callback: CallbackQuery):
         with open(f"bot//{product.get('product_file_list')}", 'rb') as f:
             products_list = f.readlines()
             num_of_products = len(products_list)
-    caption = (
-        f"{product_id.split('&', 1)[1] if '&' in product_id else product_id}\n\n"
-        f"💵 Цена: {product['amount']}₽\n\n"
-        f"📝 Описание:\n{product['description']}"
-    )
+    if isinstance(product.get('amount'), dict):     
+        caption = (
+            f"{product_id.split('&', 1)[1] if '&' in product_id else product_id}\n\n"
+            f"💵 Цена:\n{"₽\n".join(["— "+region + ': ' + str(product['amount'][region]) for region in product['amount']])}₽\n\n"
+            f"📝 Описание:\n{product['description']}"
+        )
+    else:
+        caption = (
+            f"{product_id.split('&', 1)[1] if '&' in product_id else product_id}\n\n"
+            f"💵 Цена: {product['amount']}₽\n\n"
+            f"📝 Описание:\n{product['description']}"
+        )
     if product.get('type') == 'product' and product.get('product_file_list'):
         reply_markup = await build_product_keyboard(category_path_ids, is_auto_product=True, num_of_products=num_of_products)
     else:
@@ -141,7 +148,10 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
     if callback.data.endswith("a"):
         num_of_products = int(callback.data.split('_')[-1][:-1]) # Extract the number of products from the callback data
     # Extract the category path IDs from the callback data
-    parts = callback.data.split('_')[:-1]
+    if 'r' in callback.data:
+        parts = callback.data.split('r')[0].split('_')[:-1]
+    else:
+        parts = callback.data.split('_')[:-1]
     category_path_ids = parts[1:]
     category_data = CATEGORIES_DATA
     keys = []
@@ -166,21 +176,31 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
     if not product:
         await callback.answer("Продукт не найден")
         return
+    if isinstance(product.get('amount'), dict) and 'r' not in callback.data:
+        await callback.message.answer(product.get("choose_region_message"), reply_markup=await build_region_keyboard(product['amount'].keys(), callback.data))
+        await callback.message.delete()
+        return
+    elif 'r' in callback.data:
+        price_for_region = product['amount'][list(product['amount'].keys())[int(callback.data.split('r')[1])]]
+        region = list(product['amount'].keys())[int(callback.data.split('r')[1])]
+    else:
+        price_for_region = product['amount']
+        region = None
 
     async with get_session() as session:
         user = await get_or_create_user(session, callback.from_user.id, callback.from_user.username)
-        if user.balance < product['amount'] or (num_of_products and user.balance < product['amount'] * num_of_products):
+        if user.balance < price_for_region or (num_of_products and user.balance < price_for_region * num_of_products):
             
             if num_of_products:
-                await callback.message.answer(f"Вам не хватает {product['amount'] * num_of_products - user.balance}₽")
-                await handle_topup_balance(callback, state=state, is_from_product=True, product_id=product_id, amount=product['amount']*num_of_products - user.balance, callback_back=f"p_{callback.data[2:]}")
+                await callback.message.answer(f"Вам не хватает {price_for_region * num_of_products - user.balance}₽")
+                await handle_topup_balance(callback, state=state, is_from_product=True, product_id=product_id, amount=price_for_region*num_of_products - user.balance, callback_back=f"p_{callback.data[2:]}")
             else:
-                await callback.message.answer(f"Вам не хватает {product['amount'] - user.balance}₽")
-                await handle_topup_balance(callback, state=state, is_from_product=True, product_id=product_id, amount=product['amount'] - user.balance, callback_back=f"p_{callback.data[2:]}")
+                await callback.message.answer(f"Вам не хватает {price_for_region - user.balance}₽")
+                await handle_topup_balance(callback, state=state, is_from_product=True, product_id=product_id, amount=price_for_region - user.balance, callback_back=f"p_{callback.data[2:]}")
         else:
             if product["type"] == "product":
-                await update_balance(session, user.tg_id, -product['amount'] * num_of_products)
-                order = await create_order(session, user.tg_id, keys[-2].split('&', 1)[1], product_id.split('&', 1)[1] if '&' in product_id else product_id, num_of_products, product['amount'] * num_of_products)
+                await update_balance(session, user.tg_id, -price_for_region * num_of_products)
+                order = await create_order(session, user.tg_id, keys[-2].split('&', 1)[1], product_id.split('&', 1)[1] if '&' in product_id else product_id, num_of_products, price_for_region * num_of_products, region=region)
                 with open(f"bot//{product.get('product_file_list')}", 'r') as f:
                     # Read all lines from the file
                     lines = f.readlines()
@@ -194,7 +214,7 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
                     f"🎲Категория: {keys[-2].split('&', 1)[1]}\n"
                     f"🛍Товар: {product_id.split('&', 1)[1]}\n"
                     f"🖇Количество: {num_of_products} шт.\n"
-                    f"💰Сумма: {product['amount'] * num_of_products}₽\n"
+                    f"💰Сумма: {price_for_region * num_of_products}₽\n"
                     f"🎭Имя: {callback.from_user.full_name} : {user.tg_id}\n"
                     f"💡Заказ: {order.order_number}\n"
                     f"➖➖➖➖➖➖➖➖➖➖➖\n"
@@ -203,13 +223,13 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
                 )
                 await callback.message.delete()
             elif product["type"] == "tiket":
-                await update_balance(session, user.tg_id, -product['amount'])
-                order = await create_order(session, user.tg_id, keys[-2].split('&', 1)[1], product_id.split('&', 1)[1] if '&' in product_id else product_id, 1, product['amount'])
+                await update_balance(session, user.tg_id, -price_for_region)
+                order = await create_order(session, user.tg_id, keys[-2].split('&', 1)[1], product_id.split('&', 1)[1] if '&' in product_id else product_id, 1, price_for_region, region=region)
                 await callback.message.answer(
                     f"➖➖➖➖➖➖➖➖➖➖➖\n"
                     f"🎲Категория: {keys[-2].split('&', 1)[1]}\n"
                     f"🛍Товар: {product_id.split('&', 1)[1]}\n"
-                    f"💰Сумма: {product['amount']}₽\n"
+                    f"💰Сумма: {price_for_region}₽\n"
                     f"🎭Имя: {callback.from_user.full_name} : {user.tg_id}\n"
                     f"💡Заказ: {order.order_number}\n"
                     f"➖➖➖➖➖➖➖➖➖➖➖\n"

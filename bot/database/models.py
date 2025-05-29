@@ -30,6 +30,7 @@ class Order(Base):
     category: Mapped[str] = mapped_column(String(100), nullable=False)
     product_name: Mapped[str] = mapped_column(String(100), nullable=False)
     amount: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    region: Mapped[str | None] = mapped_column(String(50), nullable=True)
     price: Mapped[float] = mapped_column(Float, nullable=False)
     order_number: Mapped[int] = mapped_column(Integer, unique=True, nullable=False,)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

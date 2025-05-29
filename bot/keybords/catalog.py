@@ -30,15 +30,15 @@ async def build_category_keyboard(category_data, level=0, parent_id=None):
 
     if level > 0 and not parent_id:
         level = 0  # Reset level if no parent_id is provided
+    builder.adjust(3)
     if level > 0:
         # Add a back button if we are not at the top level
         prev_page = parent_id.rsplit("_", 1)[0]
         back_callback_data = f"c_{level-1}_{prev_page}" if (parent_id and "_" in parent_id) else f"c_{level-1}"
-        builder.add(InlineKeyboardButton(
+        builder.row(InlineKeyboardButton(
             text="🔙 Назад",
             callback_data=back_callback_data
         ))
-    builder.adjust(3)
     return builder.as_markup()
 
 async def build_product_keyboard(category_path_ids, is_auto_product=False, num_of_products=None):
@@ -50,12 +50,31 @@ async def build_product_keyboard(category_path_ids, is_auto_product=False, num_o
                 text=f"{i+1} шт.",
                 callback_data=f"b_{'_'.join(category_path_ids)}_{category_path_ids[-1]}_{i+1}a"
             ))
-    builder.add(InlineKeyboardButton(
-        text="🛒 Купить",
-        callback_data=f"b_{'_'.join(category_path_ids)}_{category_path_ids[-1]}"
-    ))
-    builder.add(InlineKeyboardButton(
+            if i==9:
+                break
+    if not is_auto_product:
+        builder.add(InlineKeyboardButton(
+            text="🛒 Купить",
+            callback_data=f"b_{'_'.join(category_path_ids)}_{category_path_ids[-1]}"
+        ))
+    # Add "Назад" button at the bottom, on a new row
+    builder.row(
+        InlineKeyboardButton(
+            text="🔙 Назад",
+            callback_data=f"c_{len(category_path_ids)-1}_{'_'.join(category_path_ids[:-1])}"
+        )
+    )
+    return builder.as_markup()
+
+async def build_region_keyboard(regions, callback_product):
+    builder = InlineKeyboardBuilder()
+    for i, region in enumerate(regions):
+        builder.add(InlineKeyboardButton(
+            text=region,
+            callback_data=f"{callback_product}r{i}"
+        ))
+    builder.row(InlineKeyboardButton(
         text="🔙 Назад",
-        callback_data=f"c_{len(category_path_ids)-1}_{'_'.join(category_path_ids[:-1])}"
+        callback_data=callback_product
     ))
     return builder.as_markup()

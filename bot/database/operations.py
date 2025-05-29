@@ -32,13 +32,14 @@ async def update_balance(session: AsyncSession, tg_id: int, amount: float) -> Us
         await session.commit()
     return user
 
-async def create_order(session: AsyncSession, tg_id: int, category: str, product_name: str, amount: int, price: float) -> Order:
+async def create_order(session: AsyncSession, tg_id: int, category: str, product_name: str, amount: int, price: float, region: int = None ) -> Order:
     """Create a new order for a user"""
     order = Order(
         tg_id=tg_id,
         category=category,
         product_name=product_name,
-        amount=amount,  # Default amount is 1
+        amount=amount,
+        region=region,
         price=price,
         order_number=await get_next_order_number(session),
         created_at=datetime.utcnow()
