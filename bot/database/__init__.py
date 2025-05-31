@@ -6,11 +6,14 @@ from .operations import (
     get_or_create_user,
     update_balance,
     create_order,
+    get_order,
+    get_topups,
     get_user_orders,
     create_topup,
     get_user_topups,
-    get_next_order_number
-
+    get_next_order_number,
+    get_users_refferals,
+    get_orders_by_status
 )
 
 __all__ = [
@@ -28,5 +31,9 @@ __all__ = [
     'create_topup',
     'get_user_topups',
     'close_db',
-    'get_next_order_number'
+    'get_next_order_number',
+    'get_users_refferals',
+    'get_orders_by_status',
+    'get_order',
+    'get_topups'
 ]

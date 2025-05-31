@@ -37,6 +37,20 @@ async def check_invoice_status(invoice_id: str):
         print(f"Error checking invoice status: {e}")
         return None
     
+async def get_balance():
+    """
+    Get the balance of the CrystalPAY account.
+    
+    :return: Balance in kopecks
+    """
+    try:
+        balance = crystalpayAPI.Balance.getinfo()
+        return balance
+    except Exception as e:
+        print(f"Error getting balance: {e}")
+        return None
+
+    
 
 
 

@@ -2,7 +2,8 @@ import asyncio
 import logging
 from aiogram import Bot, Dispatcher
 
-from bot.handlers import router
+from bot.handlers.common import router as common_router
+from bot.handlers.admin import router as admin_router
 from bot.config import TOKENS_DATA
 from bot.database import init_db, close_db
 
@@ -22,7 +23,8 @@ async def main():
     
     bot = Bot(token=TOKENS_DATA['tg_token'])
     dp = Dispatcher()
-    dp.include_router(router)
+    dp.include_router(admin_router)
+    dp.include_router(common_router)
     
     try:
         await dp.start_polling(bot)

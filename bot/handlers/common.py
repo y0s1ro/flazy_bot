@@ -1,15 +1,21 @@
 from aiogram import Router, F
 from aiogram.filters import Command
-from bot.config import START_MESSAGE, BUTTONS_DATA, CATEGORIES_DATA
+from bot.config import START_MESSAGE, BUTTONS_DATA, CATEGORIES_DATA, TOKENS_DATA
 from aiogram.types import Message, FSInputFile, CallbackQuery
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from bot.keybords import build_category_keyboard, build_product_keyboard, get_menu, get_profile_buttons, get_topup_buttons, get_payments_button, get_back_button, build_region_keyboard
-from bot.database import get_session, get_or_create_user, get_user_orders, get_user_topups, update_balance, create_topup, create_order
+from bot.database import get_session, get_or_create_user, get_user_orders, get_user_topups, update_balance, create_topup, create_order, get_users_refferals, get_user
+from bot.handlers.admin import send_to_admins
 from bot.payments import acquiring, crystalpay
 import uuid
 
-#add different currency
+STATUS_DICT = {
+    "pending": "Обрабатывается",
+    "completed": "Выполнен",
+    "canceled": "Отменен"
+}
+
 router = Router()
 
 class TopUpStates(StatesGroup):
@@ -20,7 +26,24 @@ class TopUpStates(StatesGroup):
 async def cmd_start(message: Message):
     async with get_session() as session:
         # Get or create user in the database
-        user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+        referrer_id = message.text[7:]
+        if any(char.isalpha() for char in referrer_id) and not await get_user(session, message.from_user.id):
+            user = await get_or_create_user(session, message.from_user.id, message.from_user.username, ref_link=referrer_id)
+            try:
+                await send_to_admins(message, f"Пользователь {message.from_user.full_name} зарегистрировался по реферальной ссылке {referrer_id}!")
+            except Exception as e:
+                print(f"Error sending referral message: {e}")
+        elif str(referrer_id) != "" and not await get_user(session, message.from_user.id):
+            if str(referrer_id) != str(message.from_user.id):
+                user = await get_or_create_user(session, message.from_user.id, message.from_user.username, referrer_id=referrer_id)
+                try:
+                    await message.bot.send_message(referrer_id, f"Пользователь {message.from_user.full_name} зарегистрировался по вашей реферальной ссылке!")
+                except Exception as e:
+                    print(f"Error sending referral message: {e}")
+            else:
+                await message.answer("Вы не можете использовать свою реферальную ссылку для регистрации.")
+        else:
+            user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
         photo_path = "bot/commands/start/start.jpg"
         # Open the file and send it
         await message.answer_photo(FSInputFile(path=photo_path),
@@ -200,7 +223,7 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
         else:
             if product["type"] == "product":
                 await update_balance(session, user.tg_id, -price_for_region * num_of_products)
-                order = await create_order(session, user.tg_id, keys[-2].split('&', 1)[1], product_id.split('&', 1)[1] if '&' in product_id else product_id, num_of_products, price_for_region * num_of_products, region=region)
+                order = await create_order(session, user.tg_id, keys[-2].split('&', 1)[1], product_id.split('&', 1)[1] if '&' in product_id else product_id, num_of_products, price_for_region * num_of_products, region=region, status="completed")
                 with open(f"bot//{product.get('product_file_list')}", 'r') as f:
                     # Read all lines from the file
                     lines = f.readlines()
@@ -214,6 +237,7 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
                     f"🎲Категория: {keys[-2].split('&', 1)[1]}\n"
                     f"🛍Товар: {product_id.split('&', 1)[1]}\n"
                     f"🖇Количество: {num_of_products} шт.\n"
+                    f"✅Статус: Выполнен\n"
                     f"💰Сумма: {price_for_region * num_of_products}₽\n"
                     f"🎭Имя: {callback.from_user.full_name} : {user.tg_id}\n"
                     f"💡Заказ: {order.order_number}\n"
@@ -221,37 +245,25 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
                     f"🛒Ваш товар:\n{''.join([line for line in selected_lines])}\n"
                     f"Спасибо за покупку!"
                 )
+                await send_to_admins(callback.message, f"Пользователь {callback.from_user.full_name} купил товар {product_id.split('&', 1)[1]} на сумму {price_for_region}₽. Заказ №{order.order_number}.")
                 await callback.message.delete()
             elif product["type"] == "tiket":
                 await update_balance(session, user.tg_id, -price_for_region)
-                order = await create_order(session, user.tg_id, keys[-2].split('&', 1)[1], product_id.split('&', 1)[1] if '&' in product_id else product_id, 1, price_for_region, region=region)
+                order = await create_order(session, user.tg_id, keys[-2].split('&', 1)[1], product_id.split('&', 1)[1] if '&' in product_id else product_id, 1, price_for_region, region=region, status="pending")
                 await callback.message.answer(
                     f"➖➖➖➖➖➖➖➖➖➖➖\n"
                     f"🎲Категория: {keys[-2].split('&', 1)[1]}\n"
                     f"🛍Товар: {product_id.split('&', 1)[1]}\n"
+                    f"⏳Статус: Обрабатывается\n"
                     f"💰Сумма: {price_for_region}₽\n"
                     f"🎭Имя: {callback.from_user.full_name} : {user.tg_id}\n"
                     f"💡Заказ: {order.order_number}\n"
                     f"➖➖➖➖➖➖➖➖➖➖➖\n"
                     f"Для получения товара обратитесь к  @FlazySupport"
                 )
+                await send_to_admins(callback.message, f"Пользователь {callback.from_user.full_name} купил товар {product_id.split('&', 1)[1]} на сумму {price_for_region}₽. Заказ №{order.order_number}.")
                 await callback.message.delete()
 
-        
-@router.callback_query(F.data == "back_to_profile")
-async def handle_back_to_profile(callback: CallbackQuery):
-    async with get_session() as session:
-        user = await get_or_create_user(session, callback.from_user.id, callback.from_user.username)
-        user_orders = await get_user_orders(session, user.tg_id)
-        text = BUTTONS_DATA["🪪 Профиль"]['text'].format(
-            username = user.username if user.username else "Нет имени пользователя",
-            user_id = user.tg_id,
-            balance = user.balance,
-            orders = len(user_orders),
-            refs = user.ref_link if user.ref_link else "Нет реферальной ссылки"
-        )
-        await callback.message.edit_text(text=text, reply_markup=await get_profile_buttons())
-    await callback.answer()
 
 @router.callback_query(F.data == "orders_history")
 async def handle_orders_history(callback: CallbackQuery):
@@ -259,10 +271,10 @@ async def handle_orders_history(callback: CallbackQuery):
         user = await get_or_create_user(session, callback.from_user.id, callback.from_user.username)
         user_orders = await get_user_orders(session, user.tg_id)
         if not user_orders:
-            orders_text = "У вас нет истории пополнений."
+            orders_text = "У вас нет истории заказов."
         else:
             orders_text = "\n".join(
-                f"Заказ #{order.id}: {order.product_name} - {order.price}₽"
+                f"Заказ #{order.order_number}: {order.product_name} - {order.price}₽, Статус: {STATUS_DICT[order.status]}"
                 for order in user_orders
             )
         await callback.message.edit_text(orders_text, reply_markup=await get_back_button("back_to_profile"))
@@ -391,7 +403,8 @@ async def handle_check_payment_status(callback: CallbackQuery, state: FSMContext
         await callback.answer("Оплата не найдена или не завершена. Пожалуйста, проверьте статус оплаты.")
 
 @router.message(F.text == "🪪 Профиль")
-async def handle_profile(message: Message):
+@router.callback_query(F.data == "back_to_profile")
+async def handle_profile(message: Message | CallbackQuery):
     async with get_session() as session:
         user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
         user_orders = await get_user_orders(session, user.tg_id)
@@ -400,9 +413,14 @@ async def handle_profile(message: Message):
             user_id = user.tg_id,
             balance = user.balance,
             orders = len(user_orders),
-            refs = user.ref_link if user.ref_link else "Нет реферальной ссылки"
+            refs = len(await get_users_refferals(session, user.tg_id)),
+            ref_link = f"https://t.me/{TOKENS_DATA["Bot_name"]}?start={user.tg_id}"
         )
-        await message.answer(text=text, reply_markup=await get_profile_buttons())
+        if isinstance(message, CallbackQuery):
+            await message.message.edit_text(text=text, reply_markup=await get_profile_buttons(), parse_mode='HTML')
+            await message.answer()
+        else:
+            await message.answer(text=text, reply_markup=await get_profile_buttons(), parse_mode='HTML')
 
 @router.message()
 async def unknown_command(message: Message):
@@ -410,17 +428,7 @@ async def unknown_command(message: Message):
         if BUTTONS_DATA[message.text]['type'] == 'text':
             if message.text == "🪪 Профиль":
                 # Show user profile
-                async with get_session() as session:
-                    user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
-                    user_orders = await get_user_orders(session, user.tg_id)
-                    text = BUTTONS_DATA[message.text]['text'].format(
-                        username = user.username if user.username else "Нет имени пользователя",
-                        user_id = user.tg_id,
-                        balance = user.balance,
-                        orders = len(user_orders),
-                        refs = user.ref_link if user.ref_link else "Нет реферальной ссылки"
-                    )
-                    await message.answer(text=text, reply_markup=await get_profile_buttons())
+                await handle_profile(message)
             else:
                 await message.answer(text=BUTTONS_DATA[message.text]['text'])
         elif BUTTONS_DATA[message.text]['type'] == 'func':

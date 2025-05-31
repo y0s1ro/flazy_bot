@@ -10,18 +10,18 @@ async def get_user(session: AsyncSession, tg_id: int) -> User:
     result = await session.execute(select(User).where(User.tg_id == tg_id))
     return result.scalar_one_or_none()
 
-async def create_user(session: AsyncSession, tg_id: int, username: str = None, ref_link: str = None) -> User:
+async def create_user(session: AsyncSession, tg_id: int, username: str = None, ref_link: str = None, referrer_id: int = None) -> User:
     """Create new user"""
-    user = User(tg_id=tg_id, username=username, ref_link=ref_link, balance=0.0)
+    user = User(tg_id=tg_id, username=username, referrer_id = referrer_id, ref_link=ref_link, balance=0.0)
     session.add(user)
     await session.commit()
     return user
 
-async def get_or_create_user(session: AsyncSession, tg_id: int, username: str = None) -> User:
+async def get_or_create_user(session: AsyncSession, tg_id: int, username: str = None, ref_link: str = None, referrer_id: int = None) -> User:
     """Get existing user or create new one"""
     user = await get_user(session, tg_id)
     if not user:
-        user = await create_user(session, tg_id, username)
+        user = await create_user(session, tg_id, username, ref_link, referrer_id)
     return user
 
 async def update_balance(session: AsyncSession, tg_id: int, amount: float) -> User:
@@ -32,7 +32,7 @@ async def update_balance(session: AsyncSession, tg_id: int, amount: float) -> Us
         await session.commit()
     return user
 
-async def create_order(session: AsyncSession, tg_id: int, category: str, product_name: str, amount: int, price: float, region: int = None ) -> Order:
+async def create_order(session: AsyncSession, tg_id: int, category: str, product_name: str, amount: int, price: float, region: int = None, status: str = None) -> Order:
     """Create a new order for a user"""
     order = Order(
         tg_id=tg_id,
@@ -42,11 +42,19 @@ async def create_order(session: AsyncSession, tg_id: int, category: str, product
         region=region,
         price=price,
         order_number=await get_next_order_number(session),
-        created_at=datetime.utcnow()
+        created_at=datetime.utcnow(),
+        status=status
     )
     session.add(order)
     await session.commit()
     return order
+
+async def get_order(session: AsyncSession, order_number: int) -> Order:
+    """Get order by order number"""
+    result = await session.execute(
+        select(Order).where(Order.order_number == order_number)
+    )
+    return result.scalar_one_or_none()
 
 async def get_user_orders(session: AsyncSession, tg_id: int) -> list[Order]:
     """Get all orders for a user"""
@@ -79,8 +87,29 @@ async def get_user_topups(session: AsyncSession, tg_id: int) -> list[TopUp]:
     )
     return result.scalars().all()
 
+async def get_topups(session: AsyncSession) -> int:
+    """Get all top-ups"""
+    result = await session.execute(
+        select(TopUp).order_by(TopUp.created_at.desc())
+    )
+    return result.scalars().all()
+
 async def get_next_order_number(session: AsyncSession) -> int:
     max_order_number = await session.scalar(
         select(func.max(Order.order_number))
     )
     return (max_order_number or 1000) + 1
+
+async def get_users_refferals(session: AsyncSession, user_id: int) -> list[User]:
+    """Get all users referred by a specific user"""
+    result = await session.execute(
+        select(User).where(User.referrer_id == user_id)
+    )
+    return result.scalars().all()
+
+async def get_orders_by_status(session: AsyncSession, status: str) -> list[Order]:
+    """Get all orders by status"""
+    result = await session.execute(
+        select(Order).where(Order.status == status).order_by(Order.created_at.desc())
+    )
+    return result.scalars().all()

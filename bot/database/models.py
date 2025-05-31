@@ -34,6 +34,7 @@ class Order(Base):
     price: Mapped[float] = mapped_column(Float, nullable=False)
     order_number: Mapped[int] = mapped_column(Integer, unique=True, nullable=False,)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    status: Mapped[str] = mapped_column(String(20), default='pending', nullable=False)
     
     # Relationship with user
     user: Mapped["User"] = relationship("User", back_populates="orders")
