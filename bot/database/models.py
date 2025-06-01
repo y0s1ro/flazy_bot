@@ -13,6 +13,7 @@ class User(Base):
     referrer_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey('users.tg_id'), nullable=True)
     ref_link: Mapped[str | None] = mapped_column(String(100), nullable=True)
     balance: Mapped[float] = mapped_column(Float, default=0.0)
+    is_banned: Mapped[bool] = mapped_column(Integer, default=0, nullable=False)
     
     # Relationship with orders
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="user")

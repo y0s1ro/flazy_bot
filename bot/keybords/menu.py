@@ -47,44 +47,46 @@ async def get_payments_button(acquiring_link: str, crystal_link: str):
     
     return payments_menu.adjust(1).as_markup()
 
-async def get_admin_menu():
-    admin_menu = InlineKeyboardBuilder()
+async def get_orders_history_buttons(orders):
+    orders_menu = InlineKeyboardBuilder()
     
-    admin_menu.add(InlineKeyboardButton(text="📦 Управление товарами", callback_data="manage_products"))
-    admin_menu.add(InlineKeyboardButton(text="📊 Заказы", callback_data="manage_orders"))
-    admin_menu.add(InlineKeyboardButton(text="👥 Пользователи", callback_data="manage_users"))
-    admin_menu.add(InlineKeyboardButton(text="💰 Финансы", callback_data="manage_finances"))
-    admin_menu.add(InlineKeyboardButton(text="⚙️ Настройки", callback_data="manage_settings"))
-    admin_menu.add(InlineKeyboardButton(text="📣 Уведомления", callback_data="manage_notifications"))
-    
-    return admin_menu.adjust(2).as_markup()
+    for order in orders:
+        orders_menu.add(InlineKeyboardButton(
+            text=f"№{order.order_number}",
+            callback_data=f"view_order_{order.order_number}"
+        ))
+    orders_menu.adjust(4)
+    orders_menu.row(
+        InlineKeyboardButton(
+            text="🔙 Назад",
+            callback_data="back_to_profile"
+        )
+    )
+    return orders_menu.as_markup()
 
-async def get_manage_order_menu():
-    manage_order_menu = InlineKeyboardBuilder()
+async def get_topup_history_buttons(topup_history):
+    topup_menu = InlineKeyboardBuilder()
     
-    manage_order_menu.add(InlineKeyboardButton(text="📦 Обработка заказов", callback_data="pending_orders"))
-    manage_order_menu.add(InlineKeyboardButton(text="✅ Выполненные заказы", callback_data="completed_orders"))
-    manage_order_menu.add(InlineKeyboardButton(text="❌ Отменённые заказы", callback_data="cancelled_orders"))
-    manage_order_menu.add(InlineKeyboardButton(text="🔙 На главную", callback_data="back_to_admin_menu"))
-    
-    return manage_order_menu.adjust(2).as_markup()
+    for topup in topup_history:
+        topup_menu.add(InlineKeyboardButton(
+            text=f"{topup.id}",
+            callback_data=f"view_topup_{topup.order_number}"
+        ))
 
-async def get_change_order_status(callback_data: str):
-    change_order_status = InlineKeyboardBuilder()
-    
-    change_order_status.add(InlineKeyboardButton(text="✅ Выполнен", callback_data=f"ap_{callback_data}"))
-    change_order_status.add(InlineKeyboardButton(text="❌ Отменить", callback_data=f"re_{callback_data}"))
-    change_order_status.add(InlineKeyboardButton(text="🔙 На главную", callback_data="back_to_admin_menu"))
-    
-    return change_order_status.adjust(2).as_markup()
+    topup_menu.adjust(4)
+    topup_menu.row(
+        InlineKeyboardButton(
+            text="🔙 Назад",
+            callback_data="back_to_profile"
+        )
+    )
+    return topup_menu.as_markup()
 
-async def get_manage_finance_menu():
-    manage_finance_menu = InlineKeyboardBuilder()
+async def get_review_channel(button_text:str,url:str):
+    review_channel = InlineKeyboardBuilder()
     
-    manage_finance_menu.add(InlineKeyboardButton(text="💵 Просмотр баланса", callback_data="check_balance"))
-    manage_finance_menu.add(InlineKeyboardButton(text="📈 Статистика продаж", callback_data="sales_stat"))
-    manage_finance_menu.add(InlineKeyboardButton(text="🧾 История пополнений", callback_data="payment_history"))
-    manage_finance_menu.add(InlineKeyboardButton(text="🔙 На главную", callback_data="back_to_admin_menu"))
-    
-    return manage_finance_menu.adjust(2).as_markup()
-
+    review_channel.add(InlineKeyboardButton(
+        text=button_text,
+        url = url
+    ))
+    return review_channel.as_markup()

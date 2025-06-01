@@ -4,10 +4,13 @@ from bot.config import START_MESSAGE, BUTTONS_DATA, CATEGORIES_DATA, TOKENS_DATA
 from aiogram.types import Message, FSInputFile, CallbackQuery
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
-from bot.keybords import get_admin_menu, get_manage_order_menu, get_change_order_status, get_back_button, get_manage_finance_menu
-from bot.database import get_orders_by_status, get_session, get_user, get_order, update_balance, get_topups
+from aiogram import BaseMiddleware
+from bot.keybords import get_admin_menu, get_manage_order_menu, get_change_order_status, get_back_button, get_manage_finance_menu, get_users_menu, build_review_keyboard
+from bot.database import get_orders_by_status, get_session, get_user, get_order, update_balance, get_topups, get_users, ban_user
 from bot.payments import crystalpay, acquiring
 from datetime import datetime
+from bot.fsm import AdminStates
+from bot.handlers.reviews import ask_for_review
 
 router = Router()
 
@@ -51,7 +54,7 @@ async def manage_orders(callback: CallbackQuery):
 async def manage_users(callback: CallbackQuery):
     await callback.message.edit_text(
         text="Здесь вы можете управлять пользователями. Используйте соответствующие команды.",
-        reply_markup=await get_admin_menu()
+        reply_markup=await get_users_menu()
     )
 
 @router.callback_query(F.data == "manage_finances")
@@ -139,7 +142,7 @@ async def show_cancelled_orders(callback: CallbackQuery):
     await callback.answer()
 
 @router.callback_query(F.data.startswith("ap_"))
-async def approve_order(callback: CallbackQuery):
+async def approve_order(callback: CallbackQuery, state: FSMContext):
     order_number = callback.data.split("_")[1]
     async with get_session() as session:
         order = await get_order(session, int(order_number))
@@ -151,8 +154,10 @@ async def approve_order(callback: CallbackQuery):
             )
             await callback.bot.send_message(
                 chat_id=order.tg_id,
-                text=f"Ваш заказ №{order.order_number} на товар '{order.product_name}' был успешно выполнен."
+                text=f"Ваш заказ №{order.order_number} на товар '{order.product_name}' был успешно выполнен.",
+                reply_markup=await build_review_keyboard(order.order_number)
             )
+            print(order.category, order.product_name)
         else:
             await callback.message.edit_text(
                 text="Заказ не найден.",
@@ -246,3 +251,117 @@ async def payment_history(callback: CallbackQuery):
             text=text,
             reply_markup=await get_back_button("back_to_admin_menu")
         )
+
+@router.callback_query(F.data == "view_users")
+async def view_users(callback: CallbackQuery):
+    async with get_session() as session:
+        users = await get_users(session)
+        
+        if users:
+            text = "Список пользователей:\n\n"
+            for user in users:
+                text += f"ID: {user.tg_id}, Username: {user.username}, Баланс: {user.balance}₽, Статус: {'Забанен' if user.is_banned else 'Активен'}\n"
+        else:
+            text = "Нет зарегистрированных пользователей."
+        
+        await callback.message.edit_text(
+            text=text,
+            reply_markup=await get_back_button("back_to_admin_menu")
+        )
+
+@router.callback_query(F.data == "search_user")
+async def search_user(callback: CallbackQuery, state: FSMContext):
+    await callback.message.edit_text(
+        text="Введите ID пользователя для поиска:",
+        reply_markup=await get_back_button("back_to_admin_menu")
+    )
+    await callback.answer()
+    await state.set_state(AdminStates.search_user_state)
+
+@router.message(AdminStates.search_user_state, F.text)
+async def search_user_by_id(message: Message, state: FSMContext):
+    user_id = message.text.strip()
+    
+    async with get_session() as session:
+        user = await get_user(session, int(user_id))
+        
+        if user:
+            text = (
+                f"Пользователь найден:\n"
+                f"ID: {user.tg_id}\n"
+                f"Username: {user.username}\n"
+                f"Баланс: {user.balance}₽\n"
+                f"Статус: {'Забанен' if user.is_banned else 'Активен'}\n"
+            )
+            if getattr(user, "refer_id", None):
+                text += f"ID реферала: {user.refer_id}\n"
+            if getattr(user, "refer_link", None):
+                text += f"Ревфральная ссылка: {user.refer_link}\n"
+            # Получаем сумму заказов пользователя
+            orders = await get_orders_by_status(session, "completed")
+            user_orders = [o for o in orders if o.tg_id == user.tg_id]
+            total_amount = sum(o.price for o in user_orders)
+            text += f"Сумма заказов: {total_amount}₽"
+        else:
+            text = "Пользователь не найден."
+        
+        await message.answer(text=text, reply_markup=await get_back_button("back_to_admin_menu"))
+    
+    await state.clear()
+
+@router.callback_query(F.data == "ban_user")
+async def handle_ban_user(callback: CallbackQuery, state: FSMContext):
+    await callback.message.edit_text(
+        text="Введите ID пользователя для бана:",
+        reply_markup=await get_back_button("back_to_admin_menu")
+    )
+    await callback.answer()
+    await state.set_state(AdminStates.ban_user_state)
+
+@router.message(AdminStates.ban_user_state, F.text)
+async def ban_user_by_id(message: Message, state: FSMContext):
+    user_id = message.text.strip()
+    
+    async with get_session() as session:
+        user = await get_user(session, int(user_id))
+        
+        if user:
+            await ban_user(session, user.tg_id)
+            text = f"Пользователь {user.username} (ID: {user.tg_id}) был забанен."
+            await send_to_admins(message, text)
+        else:
+            text = "Пользователь не найден."
+        
+        await message.answer(text=text, reply_markup=await get_back_button("back_to_admin_menu"))
+    
+    await state.clear()
+
+@router.callback_query(F.data == "unbun_user")
+async def handle_unban_user(callback: CallbackQuery, state: FSMContext):
+    await callback.message.edit_text(
+        text="Введите ID пользователя для разбана:",
+        reply_markup=await get_back_button("back_to_admin_menu")
+    )
+    await callback.answer()
+    await state.set_state(AdminStates.unban_user_state)
+
+@router.message(AdminStates.unban_user_state, F.text)
+async def unban_user_by_id(message: Message, state: FSMContext):
+    user_id = message.text.strip()
+    
+    async with get_session() as session:
+        user = await get_user(session, int(user_id))
+        
+        if user:
+            user.is_banned = 0
+            await session.commit()
+            text = f"Пользователь {user.username} (ID: {user.tg_id}) был разбанен."
+            await send_to_admins(message, text)
+        else:
+            text = "Пользователь не найден."
+        
+        await message.answer(text=text, reply_markup=await get_back_button("back_to_admin_menu"))
+    
+    await state.clear()
+
+

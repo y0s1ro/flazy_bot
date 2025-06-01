@@ -24,6 +24,19 @@ async def get_or_create_user(session: AsyncSession, tg_id: int, username: str = 
         user = await create_user(session, tg_id, username, ref_link, referrer_id)
     return user
 
+async def get_users(session: AsyncSession) -> list[User]:
+    """Get all users"""
+    result = await session.execute(select(User).order_by(User.tg_id))
+    return result.scalars().all()
+
+async def ban_user(session: AsyncSession, tg_id: int) -> User:
+    """Ban a user by telegram ID"""
+    user = await get_user(session, tg_id)
+    if user:
+        user.is_banned = True
+        await session.commit()
+    return user
+
 async def update_balance(session: AsyncSession, tg_id: int, amount: float) -> User:
     """Update user balance"""
     user = await get_user(session, tg_id)
@@ -86,6 +99,13 @@ async def get_user_topups(session: AsyncSession, tg_id: int) -> list[TopUp]:
         .order_by(TopUp.created_at.desc())
     )
     return result.scalars().all()
+
+async def get_topup(session: AsyncSession, order_number: str) -> TopUp:
+    """Get top-up by order number"""
+    result = await session.execute(
+        select(TopUp).where(TopUp.order_number == order_number)
+    )
+    return result.scalar_one_or_none()
 
 async def get_topups(session: AsyncSession) -> int:
     """Get all top-ups"""

@@ -11,7 +11,7 @@ async def build_category_keyboard(category_data, level=0, parent_id=None):
         if category_data[key]["Status"] == "False":
             continue
         # Extract the display name (removing the prefix like "1&")
-        id, display_name = key.split('&', 1) if '&' in key else key
+        id, display_name = key.split('&*', 1) if '&*' in key else key.split('&', 1)
         
         if isinstance(item, dict) and "description" not in item:
             # This is a category or subcategory
@@ -57,6 +57,7 @@ async def build_product_keyboard(category_path_ids, is_auto_product=False, num_o
             text="🛒 Купить",
             callback_data=f"b_{'_'.join(category_path_ids)}_{category_path_ids[-1]}"
         ))
+    builder.adjust(5)
     # Add "Назад" button at the bottom, on a new row
     builder.row(
         InlineKeyboardButton(
@@ -77,4 +78,26 @@ async def build_region_keyboard(regions, callback_product):
         text="🔙 Назад",
         callback_data=callback_product
     ))
+    return builder.as_markup()
+
+async def build_review_keyboard(order_number = None):
+    builder = InlineKeyboardBuilder()
+    callback_data = f"reviewo_{order_number}" if order_number else "review"
+    builder.add(InlineKeyboardButton(
+        text="Оставить отзыв",
+        callback_data=callback_data
+    ))
+    builder.row(InlineKeyboardButton(
+        text="Отмена",
+        callback_data="no_review"
+    ))
+    return builder.as_markup()
+
+async def build_review_rating_keyboard():
+    builder = InlineKeyboardBuilder()
+    for i in range(1, 6):
+        builder.add(InlineKeyboardButton(
+            text=f"{i} ⭐",
+            callback_data=f"rev_rating_{i}"
+        ))
     return builder.as_markup()

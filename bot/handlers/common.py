@@ -4,11 +4,14 @@ from bot.config import START_MESSAGE, BUTTONS_DATA, CATEGORIES_DATA, TOKENS_DATA
 from aiogram.types import Message, FSInputFile, CallbackQuery
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
-from bot.keybords import build_category_keyboard, build_product_keyboard, get_menu, get_profile_buttons, get_topup_buttons, get_payments_button, get_back_button, build_region_keyboard
-from bot.database import get_session, get_or_create_user, get_user_orders, get_user_topups, update_balance, create_topup, create_order, get_users_refferals, get_user
+from bot.keybords import build_category_keyboard, build_product_keyboard, get_menu, get_profile_buttons, get_topup_buttons, get_payments_button, get_back_button, build_region_keyboard, get_topup_history_buttons, get_orders_history_buttons, get_review_channel
+from bot.database import get_session, get_or_create_user, get_user_orders, get_user_topups, update_balance, create_topup, create_order, get_users_refferals, get_user, get_order, get_topup
+from bot.handlers.reviews import ask_for_review
 from bot.handlers.admin import send_to_admins
 from bot.payments import acquiring, crystalpay
 import uuid
+from bot.fsm import TopUpStates, ReviewStates
+
 
 STATUS_DICT = {
     "pending": "Обрабатывается",
@@ -17,10 +20,6 @@ STATUS_DICT = {
 }
 
 router = Router()
-
-class TopUpStates(StatesGroup):
-    waiting_for_amount = State()
-    invoice_id = State()
 
 @router.message(Command("start"))
 async def cmd_start(message: Message):
@@ -90,7 +89,7 @@ async def handle_category_selection(callback: CallbackQuery):
         return
     keyboard = await build_category_keyboard(category_data, level+1, '_'.join(parts[2:]))
     await callback.message.answer(
-        text=f"Выберете из категории: {keys[-1].split('&', 1)[1] if '&' in keys[-1] else ''}",
+        text=f"Выберете из категории: {keys[-1].split('&*', 1)[1] if '&*' in keys[-1] else keys[-1].split('&', 1)[1]}",
         reply_markup=keyboard
     )
     await callback.message.delete()
@@ -221,9 +220,15 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
                 await callback.message.answer(f"Вам не хватает {price_for_region - user.balance}₽")
                 await handle_topup_balance(callback, state=state, is_from_product=True, product_id=product_id, amount=price_for_region - user.balance, callback_back=f"p_{callback.data[2:]}")
         else:
+            category = keys[-2].split('&', 1)[1] if '&' in keys[-1] else keys[-1]
+            for i in range(len(keys)-1, -1, -1):
+                    if '&*' in keys[i]:
+                        category = keys[i].split('&*', 1)[1]
+                        break
             if product["type"] == "product":
                 await update_balance(session, user.tg_id, -price_for_region * num_of_products)
-                order = await create_order(session, user.tg_id, keys[-2].split('&', 1)[1], product_id.split('&', 1)[1] if '&' in product_id else product_id, num_of_products, price_for_region * num_of_products, region=region, status="completed")
+            
+                order = await create_order(session, user.tg_id, category, product_id.split('&', 1)[1] if '&' in product_id else product_id, num_of_products, price_for_region * num_of_products, region=region, status="completed")
                 with open(f"bot//{product.get('product_file_list')}", 'r') as f:
                     # Read all lines from the file
                     lines = f.readlines()
@@ -234,7 +239,7 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
                         fw.writelines(lines[num_of_products:])
                 await callback.message.answer(
                     f"➖➖➖➖➖➖➖➖➖➖➖\n"
-                    f"🎲Категория: {keys[-2].split('&', 1)[1]}\n"
+                    f"🎲Категория: {category}\n"
                     f"🛍Товар: {product_id.split('&', 1)[1]}\n"
                     f"🖇Количество: {num_of_products} шт.\n"
                     f"✅Статус: Выполнен\n"
@@ -247,12 +252,13 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
                 )
                 await send_to_admins(callback.message, f"Пользователь {callback.from_user.full_name} купил товар {product_id.split('&', 1)[1]} на сумму {price_for_region}₽. Заказ №{order.order_number}.")
                 await callback.message.delete()
+                await ask_for_review(callback, (category, product_id.split('&', 1)[1] if '&' in product_id else product_id), state=state)
             elif product["type"] == "tiket":
                 await update_balance(session, user.tg_id, -price_for_region)
-                order = await create_order(session, user.tg_id, keys[-2].split('&', 1)[1], product_id.split('&', 1)[1] if '&' in product_id else product_id, 1, price_for_region, region=region, status="pending")
+                order = await create_order(session, user.tg_id, category, product_id.split('&', 1)[1] if '&' in product_id else product_id, 1, price_for_region, region=region, status="pending")
                 await callback.message.answer(
                     f"➖➖➖➖➖➖➖➖➖➖➖\n"
-                    f"🎲Категория: {keys[-2].split('&', 1)[1]}\n"
+                    f"🎲Категория: {category}\n"
                     f"🛍Товар: {product_id.split('&', 1)[1]}\n"
                     f"⏳Статус: Обрабатывается\n"
                     f"💰Сумма: {price_for_region}₽\n"
@@ -263,8 +269,8 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
                 )
                 await send_to_admins(callback.message, f"Пользователь {callback.from_user.full_name} купил товар {product_id.split('&', 1)[1]} на сумму {price_for_region}₽. Заказ №{order.order_number}.")
                 await callback.message.delete()
-
-
+            
+                
 @router.callback_query(F.data == "orders_history")
 async def handle_orders_history(callback: CallbackQuery):
     async with get_session() as session:
@@ -277,7 +283,28 @@ async def handle_orders_history(callback: CallbackQuery):
                 f"Заказ #{order.order_number}: {order.product_name} - {order.price}₽, Статус: {STATUS_DICT[order.status]}"
                 for order in user_orders
             )
-        await callback.message.edit_text(orders_text, reply_markup=await get_back_button("back_to_profile"))
+        await callback.message.edit_text(orders_text, reply_markup=await get_orders_history_buttons(user_orders))
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("view_order_"))
+async def handle_view_order(callback: CallbackQuery):
+    order_number = int(callback.data.split('_')[2])
+    async with get_session() as session:
+        order = await get_order(session, order_number)
+        if not order:
+            await callback.answer("Заказ не найден.")
+            return
+        order_text = (
+            f"🆔Заказ №{order.order_number}\n"
+            f"🎲Категория: {order.category}\n"
+            f"🛍Товар: {order.product_name}\n"
+            f"🖇Количество: {order.amount}\n"
+            f"🌏Регион: {order.region if order.region else 'Не указан'}\n"
+            f"💳Цена: {order.price}₽\n"
+            f"🚚Статус: {STATUS_DICT[order.status]}\n"
+            f"🗓Дата создания: {order.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        await callback.message.edit_text(order_text, reply_markup=await get_back_button("orders_history"))
     await callback.answer()
 
 @router.callback_query(F.data == "topup_history")
@@ -292,7 +319,25 @@ async def handle_topup_history(callback: CallbackQuery):
                 f"Пополнение #{topup.id}: {topup.amount}₽ ({topup.payment_type})"
                 for topup in user_topups
             )
-        await callback.message.edit_text(topups_text, reply_markup=await get_back_button("back_to_profile"))
+        await callback.message.edit_text(topups_text, reply_markup=await get_topup_history_buttons(user_topups))
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("view_topup_"))
+async def handle_view_topup(callback: CallbackQuery):
+    topup_id = callback.data.split('_', 2)[2]
+    async with get_session() as session:
+        topup = await get_topup(session, topup_id)
+        print(topup_id)
+        if not topup:
+            await callback.answer("Пополнение не найдено.")
+            return
+        topup_text = (
+            f"💳Пополнение №{topup.id}\n"
+            f"💰Сумма: {topup.amount}₽\n"
+            f"💳Способ оплаты: {topup.payment_type}\n"
+            f"🗓Дата создания: {topup.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        await callback.message.edit_text(topup_text, reply_markup=await get_back_button("topup_history"))
     await callback.answer()
 
 @router.callback_query(F.data == "topup_balance")
@@ -301,7 +346,7 @@ async def handle_topup_balance(callback: CallbackQuery, state: FSMContext, is_fr
         # If the top-up is initiated from a product, set the state accordingly
         await state.set_state(TopUpStates.waiting_for_amount)
         await callback.message.delete()
-        await callback.message.answer("Веддите сумму пополнения в рублях:", reply_markup = await get_topup_buttons(is_from_product=True, product_id=product_id, amount=amount, callback_back="c_0"))
+        await callback.message.answer("Веддите сумму пополнения в рублях:", reply_markup = await get_topup_buttons(is_from_product=True, amount=amount, callback_back="c_0"))
         await state.update_data(callback_back=callback_back, user_id = callback.from_user.id)
         await callback.answer()
     else:
@@ -438,6 +483,13 @@ async def unknown_command(message: Message):
                 await message.answer(
                     text="Выберите категорию:",
                     reply_markup=keyboard
+                )
+        elif BUTTONS_DATA[message.text]['type'] == 'markup':
+            await message.answer(
+                    text=BUTTONS_DATA[message.text]['text'],
+                    reply_markup=await get_review_channel(
+                        BUTTONS_DATA[message.text]['button_text'], 
+                        BUTTONS_DATA[message.text]['url'].format(review_channel=TOKENS_DATA["review_channel"][1:]))
                 )
     else:
         await message.answer(text="Неизвестная команда. Пожалуйста, используйте /start для начала.")
