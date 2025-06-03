@@ -41,7 +41,7 @@ async def get_back_button(callback_data: str):
 async def get_payments_button(acquiring_link: str, crystal_link: str):
     payments_menu = InlineKeyboardBuilder()
     
-    payments_menu.add(InlineKeyboardButton(text="СПБ", url=acquiring_link))
+    payments_menu.add(InlineKeyboardButton(text="СБП", url=acquiring_link))
     payments_menu.add(InlineKeyboardButton(text="Lolz/Crypto", url=crystal_link))
     payments_menu.add(InlineKeyboardButton(text="Проверить оплату", callback_data="check_payment_status"))
     

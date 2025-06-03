@@ -49,6 +49,15 @@ async def get_users_menu():
     users_menu.add(InlineKeyboardButton(text="🔍 Поиск по ID", callback_data="search_user"))
     users_menu.add(InlineKeyboardButton(text="🚫 Забанить пользователя", callback_data="ban_user"))
     users_menu.add(InlineKeyboardButton(text="✅ Разбанить пользователя", callback_data="unbun_user"))
+    users_menu.add(InlineKeyboardButton(text="📊 Статистика приглашенний", callback_data="invite_stat"))
     users_menu.add(InlineKeyboardButton(text="🔙 На главную", callback_data="back_to_admin_menu"))
     
     return users_menu.adjust(2).as_markup()
+
+async def get_notifications_menu():
+    notifications_menu = InlineKeyboardBuilder()
+    
+    notifications_menu.add(InlineKeyboardButton(text="📤 Рассылка по пользователям", callback_data="send_notifications"))
+    notifications_menu.add(InlineKeyboardButton(text="🔙 На главную", callback_data="back_to_admin_menu"))
+    
+    return notifications_menu.adjust(1).as_markup()

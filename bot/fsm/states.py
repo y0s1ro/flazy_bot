@@ -1,11 +1,12 @@
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.fsm.context import FSMContext
 
 
 class AdminStates(StatesGroup):
     search_user_state = State()
     ban_user_state = State()
     unban_user_state = State()
+    send_notification_state = State()
+    waiting_for_image = State()
 
 class TopUpStates(StatesGroup):
     waiting_for_amount = State()

@@ -95,6 +95,26 @@ async def handle_category_selection(callback: CallbackQuery):
     await callback.message.delete()
     await callback.answer()
 
+@router.callback_query(F.data.startswith("catalog_prev"))
+async def handle_catalog_prev(callback: CallbackQuery):
+    part = int(callback.data.split('_')[-1])
+    keyboard = await build_category_keyboard(CATEGORIES_DATA, part=part-1)
+    await callback.message.edit_text(
+        text="Выберите категорию:",
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("catalog_next"))
+async def handle_catalog_prev(callback: CallbackQuery):
+    part = int(callback.data.split('_')[-1])
+    keyboard = await build_category_keyboard(CATEGORIES_DATA, part=part+1)
+    await callback.message.edit_text(
+        text="Выберите категорию:",
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
 @router.callback_query(F.data.startswith("p_"))
 async def handle_product_selection(callback: CallbackQuery):
     parts = callback.data.split('_')
@@ -199,7 +219,8 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Продукт не найден")
         return
     if isinstance(product.get('amount'), dict) and 'r' not in callback.data:
-        await callback.message.answer(product.get("choose_region_message"), reply_markup=await build_region_keyboard(product['amount'].keys(), callback.data))
+        callback_back = f"p_{'_'.join(category_path_ids)}"
+        await callback.message.answer(product.get("choose_region_message"), reply_markup=await build_region_keyboard(product['amount'].keys(), callback_back))
         await callback.message.delete()
         return
     elif 'r' in callback.data:

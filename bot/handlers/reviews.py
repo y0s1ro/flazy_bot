@@ -46,7 +46,6 @@ async def create_review_image(username: str, review_text: str, rating: int, prod
     except Exception as e:
         print(e)  # If star image not found, skip drawing stars
     # Write product name after stars
-    print(product)
     product_name = "/".join(product).strip()  # Join product tuple into a single string
     # Remove emoji from product name
     product_name = re.sub(r'[\U00010000-\U0010ffff]', '', product_name).strip()
@@ -98,9 +97,7 @@ async def ask_for_review(callback: CallbackQuery, product: tuple[str, str], stat
         reply_markup=await build_review_keyboard()
     )
     await state.update_data(product=product)
-    print("ask_for_review",product)
     data = await state.get_data()
-    print("ask_for_review data", data)
 
 @router.callback_query(F.data.startswith("review"))
 async def handle_review_request(callback: CallbackQuery, state: FSMContext):
@@ -124,8 +121,6 @@ async def handle_review_request(callback: CallbackQuery, state: FSMContext):
     )
     await callback.message.delete()
     await state.set_state(ReviewStates.waiting_for_review_rating)
-    data = await state.get_data()
-    print("handle_review_request data", data)
 
 @router.callback_query(F.data.startswith("rev_rating_"), ReviewStates.waiting_for_review_rating)
 async def handle_review_rating(callback: CallbackQuery, state: FSMContext):

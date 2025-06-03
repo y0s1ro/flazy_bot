@@ -5,7 +5,7 @@ from aiogram.types import Message, FSInputFile, CallbackQuery
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram import BaseMiddleware
-from bot.keybords import get_admin_menu, get_manage_order_menu, get_change_order_status, get_back_button, get_manage_finance_menu, get_users_menu, build_review_keyboard
+from bot.keybords import get_admin_menu, get_manage_order_menu, get_change_order_status, get_back_button, get_manage_finance_menu, get_users_menu, build_review_keyboard, get_notifications_menu
 from bot.database import get_orders_by_status, get_session, get_user, get_order, update_balance, get_topups, get_users, ban_user
 from bot.payments import crystalpay, acquiring
 from datetime import datetime
@@ -75,8 +75,67 @@ async def manage_settings(callback: CallbackQuery):
 async def manage_notifications(callback: CallbackQuery):
     await callback.message.edit_text(
         text="Здесь вы можете управлять уведомлениями. Используйте соответствующие команды.",
-        reply_markup=await get_admin_menu()
+        reply_markup=await get_notifications_menu()
     )
+
+@router.callback_query(F.data == "send_notifications")
+async def send_notifications(callback: CallbackQuery, state: FSMContext):
+    await callback.message.edit_text(
+        text="Введите текст уведомления для отправки всем пользователям:",
+        reply_markup=await get_back_button("back_to_admin_menu")
+    )
+    await callback.answer()
+    await state.set_state(AdminStates.send_notification_state)
+
+@router.message(AdminStates.send_notification_state, F.text)
+async def handle_send_notification(message: Message, state: FSMContext):
+    notification_text = message.text.strip()
+    await state.update_data(notification_text=notification_text)
+    
+    await message.answer(
+        text="Вы можете отправить уведомление с изображением или без. Если хотите отправить с изображением, загрузите его сейчас, если без напишите no_image.",
+        reply_markup=await get_back_button("back_to_admin_menu")
+    )
+    await state.set_state(AdminStates.waiting_for_image)
+
+@router.message(AdminStates.waiting_for_image, F.photo | F.document | F.text == "no_image") 
+async def handle_notification_image(message: Message, state: FSMContext):
+    data = await state.get_data()
+    notification_text = data.get("notification_text", "")
+    
+    total_users = 0
+    async with get_session() as session:
+        users = await get_users(session)
+        
+        for user in users:
+            try:
+                if message.photo:
+                    await message.bot.send_photo(
+                        chat_id=user.tg_id,
+                        photo=message.photo[-1].file_id,
+                        caption=notification_text
+                    )
+                elif message.document:
+                    await message.bot.send_document(
+                        chat_id=user.tg_id,
+                        document=message.document.file_id,
+                        caption=notification_text
+                    )
+                else:
+                    await message.bot.send_message(
+                        chat_id=user.tg_id,
+                        text=notification_text
+                    )
+                total_users += 1
+            except Exception as e:
+                print(f"Failed to send notification to {user.tg_id}: {e}")
+    
+    await message.answer(
+        text=f"Уведомление успешно отправлено {total_users} пользователям.",
+        reply_markup=await get_back_button("back_to_admin_menu")
+    )
+    
+    await state.clear()
 
 @router.callback_query(F.data == "pending_orders")
 async def show_pending_orders(callback: CallbackQuery):
@@ -157,7 +216,6 @@ async def approve_order(callback: CallbackQuery, state: FSMContext):
                 text=f"Ваш заказ №{order.order_number} на товар '{order.product_name}' был успешно выполнен.",
                 reply_markup=await build_review_keyboard(order.order_number)
             )
-            print(order.category, order.product_name)
         else:
             await callback.message.edit_text(
                 text="Заказ не найден.",
@@ -364,4 +422,26 @@ async def unban_user_by_id(message: Message, state: FSMContext):
     
     await state.clear()
 
-
+@router.callback_query(F.data == "invite_stat")
+async def invite_stat(callback: CallbackQuery):
+    async with get_session() as session:
+        users = await get_users(session)
+        invite_stats = {}
+        
+        for user in users:
+            if user.ref_link:
+                if user.ref_link not in invite_stats:
+                    invite_stats[user.ref_link] = 0
+                invite_stats[user.ref_link] += 1
+        
+        if invite_stats:
+            text = "Статистика приглашений:\n\n"
+            for ref_link, count in invite_stats.items():
+                text += f"Ссылка: {ref_link}, Зарегестрировано пользователей: {count}\n"
+        else:
+            text = "Нет статистики приглашений."
+        
+        await callback.message.edit_text(
+            text=text,
+            reply_markup=await get_back_button("back_to_admin_menu")
+        )
