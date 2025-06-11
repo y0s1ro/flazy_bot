@@ -62,3 +62,18 @@ async def get_notifications_menu():
     notifications_menu.add(InlineKeyboardButton(text="🔙 На главную", callback_data="back_to_admin_menu"))
     
     return notifications_menu.adjust(1).as_markup()
+
+async def get_custom_keyboard(callbacks: list[str], texts: list[str]):
+    """
+    Create a custom keyboard with given callbacks and texts.
+    
+    :param callbacks: List of callback data for buttons
+    :param texts: List of button texts
+    :return: InlineKeyboardMarkup with the custom buttons
+    """
+    builder = InlineKeyboardBuilder()
+    
+    for text, callback in zip(texts, callbacks):
+        builder.add(InlineKeyboardButton(text=text, callback_data=callback))
+    
+    return builder.adjust(3).as_markup()

@@ -52,6 +52,12 @@ async def cmd_start(message: Message):
 
 @router.callback_query(F.data.startswith("c_"))
 async def handle_category_selection(callback: CallbackQuery):
+    if callback.data.endswith("_fn"):
+        dont_delete = True
+        new_data = callback.data[:-3]
+    else:
+        dont_delete = False
+        new_data = callback.data
     if len(callback.data.split("_")) == 2:
         # If the callback is for the main categories
         keyboard = await build_category_keyboard(CATEGORIES_DATA)
@@ -61,7 +67,7 @@ async def handle_category_selection(callback: CallbackQuery):
         )
         await callback.answer()
         return
-    parts = callback.data.split('_')
+    parts = new_data.split('_')
     level = int(parts[1])
     category_data = CATEGORIES_DATA
     keys = []
@@ -92,7 +98,8 @@ async def handle_category_selection(callback: CallbackQuery):
         text=f"Выберете из категории: {keys[-1].split('&*', 1)[1] if '&*' in keys[-1] else keys[-1].split('&', 1)[1]}",
         reply_markup=keyboard
     )
-    await callback.message.delete()
+    if not dont_delete:
+        await callback.message.delete()
     await callback.answer()
 
 @router.callback_query(F.data.startswith("catalog_prev"))

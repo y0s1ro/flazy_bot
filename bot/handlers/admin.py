@@ -5,7 +5,7 @@ from aiogram.types import Message, FSInputFile, CallbackQuery
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram import BaseMiddleware
-from bot.keybords import get_admin_menu, get_manage_order_menu, get_change_order_status, get_back_button, get_manage_finance_menu, get_users_menu, build_review_keyboard, get_notifications_menu
+from bot.keybords import get_admin_menu, get_manage_order_menu, get_change_order_status, get_back_button, get_manage_finance_menu, get_users_menu, build_review_keyboard, get_notifications_menu, get_custom_keyboard
 from bot.database import get_orders_by_status, get_session, get_user, get_order, update_balance, get_topups, get_users, ban_user
 from bot.payments import crystalpay, acquiring
 # from bot.handlers.common import referal_bonus
@@ -66,10 +66,43 @@ async def manage_finances(callback: CallbackQuery):
 
 @router.callback_query(F.data == "manage_settings")
 async def manage_settings(callback: CallbackQuery):
-    await callback.message.edit_text(
-        text="Здесь вы можете управлять настройками бота. Используйте соответствующие команды.",
-        reply_markup=await get_admin_menu()
-    )
+    total_users = 0
+    text = f"""🎉 Обновление ассортимента наборов Fortnite! 🎉
+Мы добавили наборы, доступные к покупке прямо сейчас! 👇
+
+🆕 Новые наборы:
+
+🇺🇸 Дух независимости — 1190₽
+🔥 Лавовый чемпион — 710₽
+🌈 Мир грёз — 140₽
+🌌 Прикосновение пустоты — 290₽
+🌠 Вечное странствие — 1220₽
+💀 Кости и черепа — 1220₽
+👑 Огненные владыки — 1100₽
+🌋 Лавовые легенды — 1080₽
+☀️ Летние легенды — 1130₽
+🛡 Стражи Галактики — 1620₽
+❄️ Ледяные легенды — 1330₽
+
+🆕 Новинка!
+
+🗝 Подписка ExitLag на 1 месяц в виде ключа — 150₽
+
+💬 Вы можете быстро оформить покупку, нажав на кнопку ниже.
+⚡️ Успей первым забрать топовые сеты!"""
+    async with get_session() as session:
+        users = await get_users(session)
+        for user in users:
+            try:
+                await callback.message.bot.send_message(
+                    chat_id=user.tg_id,
+                    text=text,
+                    reply_markup = await get_custom_keyboard(callbacks=["c_2_4_1_fn", "c_2_15_1_fn"],
+                                                             texts=["🦸‍♂️ Наборы", "🔑 Ключ"])
+                )
+                total_users += 1
+            except Exception as e:
+                print(f"Failed to send notification to {user.tg_id}: {e}")
 
 @router.callback_query(F.data == "manage_notifications")
 async def manage_notifications(callback: CallbackQuery):
