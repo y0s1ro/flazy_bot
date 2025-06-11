@@ -1,6 +1,7 @@
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton)
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from bot.config import BUTTONS_DATA
+from typing import List, Optional
 
 async def get_menu():
     
@@ -82,11 +83,12 @@ async def get_topup_history_buttons(topup_history):
     )
     return topup_menu.as_markup()
 
-async def get_review_channel(button_text:str,url:str):
+async def get_review_channel(button_text:List[str],url:List[str]):
     review_channel = InlineKeyboardBuilder()
     
-    review_channel.add(InlineKeyboardButton(
-        text=button_text,
-        url = url
-    ))
+    for button_text, url in zip(button_text, url):
+        review_channel.add(InlineKeyboardButton(
+            text = button_text,
+            url = url
+        ))
     return review_channel.as_markup()

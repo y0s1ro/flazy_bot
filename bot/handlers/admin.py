@@ -8,9 +8,9 @@ from aiogram import BaseMiddleware
 from bot.keybords import get_admin_menu, get_manage_order_menu, get_change_order_status, get_back_button, get_manage_finance_menu, get_users_menu, build_review_keyboard, get_notifications_menu
 from bot.database import get_orders_by_status, get_session, get_user, get_order, update_balance, get_topups, get_users, ban_user
 from bot.payments import crystalpay, acquiring
+# from bot.handlers.common import referal_bonus
 from datetime import datetime
 from bot.fsm import AdminStates
-from bot.handlers.reviews import ask_for_review
 
 router = Router()
 
@@ -167,38 +167,66 @@ async def show_pending_orders(callback: CallbackQuery):
         pending_orders = await get_orders_by_status(session, "completed")
         if pending_orders:
             text = "Выполненые заказы:\n\n"
+            messages = []
             for order in pending_orders:
                 user = await get_user(session, order.tg_id)
-                text += f"Заказ №{order.order_number} от {order.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                text += f"Пользователь: {order.tg_id}, {user.username}\n"
-                text += f"Товар: {order.product_name}\n"
-                text += f"Сумма: {order.price}₽\n"
-        else:
-            text = "Нет Выполненых заказов."
-        await callback.message.edit_text(
-            text=text,
+                line = ""
+                line += f"Заказ №{order.order_number} от {order.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                line += f"Пользователь: {order.tg_id}, {user.username}\n"
+                line += f"Товар: {order.product_name}\n"
+                line += f"Сумма: {order.price}₽\n\n"
+                if len(text) + len(line)> 4000:
+                    messages.append(text)
+                    text = ""
+                text += line
+            if text:
+                messages.append(text)
+            for msg in messages:
+                await callback.message.answer(msg)
+            await callback.message.answer(
+            text="Конец списка.",
             reply_markup=await get_back_button("back_to_admin_menu")
-        )
+            )
+            await callback.message.delete()
+        else:
+            await callback.message.edit_text(
+                text=text,
+                reply_markup=await get_back_button("back_to_admin_menu")
+            )
 
 @router.callback_query(F.data == "cancelled_orders")
 async def show_cancelled_orders(callback: CallbackQuery):
     async with get_session() as session:
-        cancelled_orders = await get_orders_by_status(session, "cancelled")
-        if cancelled_orders:
-            text = "Отмененные заказы:\n\n"
-            for order in cancelled_orders:
+        pending_orders = await get_orders_by_status(session, "canselled")
+        if pending_orders:
+            text = "Выполненые заказы:\n\n"
+            messages = []
+            for order in pending_orders:
                 user = await get_user(session, order.tg_id)
-                text += f"Заказ №{order.order_number} от {order.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                text += f"Пользователь: {order.tg_id} {user.username}\n"
-                text += f"Товар: {order.product_name}\n"
-                text += f"Сумма: {order.price}₽\n"
-        else:
-            text = "Нет Отмененых заказов."
-        await callback.message.edit_text(
-            text=text,
+                line = ""
+                line += f"Заказ №{order.order_number} от {order.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                line += f"Пользователь: {order.tg_id}, {user.username}\n"
+                line += f"Товар: {order.product_name}\n"
+                line += f"Сумма: {order.price}₽\n\n"
+                if len(text) + len(line)> 4000:
+                    messages.append(text)
+                    text = ""
+                text += line
+            if text:
+                messages.append(text)
+            for msg in messages:
+                await callback.message.answer(msg)
+            await callback.message.answer(
+            text="Конец списка.",
             reply_markup=await get_back_button("back_to_admin_menu")
-        )
-    await callback.answer()
+            )
+            await callback.message.delete()
+        else:
+            await callback.message.edit_text(
+                text=text,
+                reply_markup=await get_back_button("back_to_admin_menu")
+            )
+            await callback.answer()
 
 @router.callback_query(F.data.startswith("ap_"))
 async def approve_order(callback: CallbackQuery, state: FSMContext):
@@ -216,6 +244,8 @@ async def approve_order(callback: CallbackQuery, state: FSMContext):
                 text=f"Ваш заказ №{order.order_number} на товар '{order.product_name}' был успешно выполнен.",
                 reply_markup=await build_review_keyboard(order.order_number)
             )
+            from bot.handlers.common import referal_bonus
+            await referal_bonus(callback.message, order.tg_id, order.price)
         else:
             await callback.message.edit_text(
                 text="Заказ не найден.",
@@ -317,15 +347,27 @@ async def view_users(callback: CallbackQuery):
         
         if users:
             text = "Список пользователей:\n\n"
+            messages = []
             for user in users:
-                text += f"ID: {user.tg_id}, Username: {user.username}, Баланс: {user.balance}₽, Статус: {'Забанен' if user.is_banned else 'Активен'}\n"
-        else:
-            text = "Нет зарегистрированных пользователей."
-        
-        await callback.message.edit_text(
-            text=text,
+                line = f"ID: {user.tg_id}, Username: {user.username}\n"
+                if len(text) + len(line) > 4000:
+                    messages.append(text)
+                    text = ""
+                text += line
+            if text:
+                messages.append(text)
+            for msg in messages:
+                await callback.message.answer(msg)
+            await callback.message.answer(
+            text="Всего пользователей: " + str(len(users)),
             reply_markup=await get_back_button("back_to_admin_menu")
-        )
+            )
+            await callback.message.delete()
+        else:
+            await callback.message.edit_text(
+            text="Нет зарегистрированных пользователей.",
+            reply_markup=await get_back_button("back_to_admin_menu")
+            )
 
 @router.callback_query(F.data == "search_user")
 async def search_user(callback: CallbackQuery, state: FSMContext):
@@ -445,3 +487,35 @@ async def invite_stat(callback: CallbackQuery):
             text=text,
             reply_markup=await get_back_button("back_to_admin_menu")
         )
+
+@router.callback_query(F.data == "change_balance")
+async def change_balance(callback: CallbackQuery, state: FSMContext):
+    await callback.message.edit_text(
+        text="Введите ID пользователя и новую сумму баланса в формате 'ID сумма':",
+        reply_markup=await get_back_button("back_to_admin_menu")
+    )
+    await callback.answer()
+    await state.set_state(AdminStates.change_balance_state)
+
+@router.message(AdminStates.change_balance_state, F.text)
+async def change_user_balance(message: Message, state: FSMContext):
+    try:
+        user_id, amount = map(str.strip, message.text.split())
+        user_id = int(user_id)
+        amount = float(amount)
+        
+        async with get_session() as session:
+            user = await get_user(session, user_id)
+            
+            if user:
+                await update_balance(session, user.tg_id, amount)
+                text = f"Баланс пользователя {user.username} (ID: {user.tg_id}) успешно изменен на {amount}₽."
+                await send_to_admins(message, text)
+            else:
+                text = "Пользователь не найден."
+        
+        await message.answer(text=text, reply_markup=await get_back_button("back_to_admin_menu"))
+    except ValueError:
+        await message.answer("Неверный формат ввода. Используйте 'ID сумма'.")
+    
+    await state.clear()

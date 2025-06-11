@@ -10,13 +10,13 @@ from bot.handlers.reviews import ask_for_review
 from bot.handlers.admin import send_to_admins
 from bot.payments import acquiring, crystalpay
 import uuid
-from bot.fsm import TopUpStates, ReviewStates
+from bot.fsm import TopUpStates
 
 
 STATUS_DICT = {
     "pending": "Обрабатывается",
     "completed": "Выполнен",
-    "canceled": "Отменен"
+    "cancelled": "Отменен"
 }
 
 router = Router()
@@ -27,14 +27,14 @@ async def cmd_start(message: Message):
         # Get or create user in the database
         referrer_id = message.text[7:]
         if any(char.isalpha() for char in referrer_id) and not await get_user(session, message.from_user.id):
-            user = await get_or_create_user(session, message.from_user.id, message.from_user.username, ref_link=referrer_id)
+            user = await get_or_create_user(session, message.from_user.id, message.from_user.full_name, ref_link=referrer_id)
             try:
                 await send_to_admins(message, f"Пользователь {message.from_user.full_name} зарегистрировался по реферальной ссылке {referrer_id}!")
             except Exception as e:
                 print(f"Error sending referral message: {e}")
         elif str(referrer_id) != "" and not await get_user(session, message.from_user.id):
             if str(referrer_id) != str(message.from_user.id):
-                user = await get_or_create_user(session, message.from_user.id, message.from_user.username, referrer_id=referrer_id)
+                user = await get_or_create_user(session, message.from_user.id, message.from_user.full_name, referrer_id=referrer_id)
                 try:
                     await message.bot.send_message(referrer_id, f"Пользователь {message.from_user.full_name} зарегистрировался по вашей реферальной ссылке!")
                 except Exception as e:
@@ -42,7 +42,7 @@ async def cmd_start(message: Message):
             else:
                 await message.answer("Вы не можете использовать свою реферальную ссылку для регистрации.")
         else:
-            user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+            user = await get_or_create_user(session, message.from_user.id, message.from_user.full_name)
         photo_path = "bot/commands/start/start.jpg"
         # Open the file and send it
         await message.answer_photo(FSInputFile(path=photo_path),
@@ -182,7 +182,7 @@ async def handle_product_selection(callback: CallbackQuery):
     try:
         await callback.answer()
     except Exception as e:
-        pass
+        print(f"Error answering callback: {e}")
 
 @router.callback_query(F.data.startswith("b_"))
 async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
@@ -219,8 +219,7 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Продукт не найден")
         return
     if isinstance(product.get('amount'), dict) and 'r' not in callback.data:
-        callback_back = f"p_{'_'.join(category_path_ids)}"
-        await callback.message.answer(product.get("choose_region_message"), reply_markup=await build_region_keyboard(product['amount'].keys(), callback_back))
+        await callback.message.answer(product.get("choose_region_message"), reply_markup=await build_region_keyboard(product['amount'].keys(), callback.data))
         await callback.message.delete()
         return
     elif 'r' in callback.data:
@@ -231,7 +230,7 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
         region = None
 
     async with get_session() as session:
-        user = await get_or_create_user(session, callback.from_user.id, callback.from_user.username)
+        user = await get_or_create_user(session, callback.from_user.id, callback.from_user.full_name)
         if user.balance < price_for_region or (num_of_products and user.balance < price_for_region * num_of_products):
             
             if num_of_products:
@@ -271,6 +270,7 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
                     f"🛒Ваш товар:\n{''.join([line for line in selected_lines])}\n"
                     f"Спасибо за покупку!"
                 )
+                await referal_bonus(callback.message, user.tg_id, price_for_region * num_of_products)
                 await send_to_admins(callback.message, f"Пользователь {callback.from_user.full_name} купил товар {product_id.split('&', 1)[1]} на сумму {price_for_region}₽. Заказ №{order.order_number}.")
                 await callback.message.delete()
                 await ask_for_review(callback, (category, product_id.split('&', 1)[1] if '&' in product_id else product_id), state=state)
@@ -295,7 +295,7 @@ async def handle_product_buy(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "orders_history")
 async def handle_orders_history(callback: CallbackQuery):
     async with get_session() as session:
-        user = await get_or_create_user(session, callback.from_user.id, callback.from_user.username)
+        user = await get_or_create_user(session, callback.from_user.id, callback.from_user.full_name)
         user_orders = await get_user_orders(session, user.tg_id)
         if not user_orders:
             orders_text = "У вас нет истории заказов."
@@ -331,7 +331,7 @@ async def handle_view_order(callback: CallbackQuery):
 @router.callback_query(F.data == "topup_history")
 async def handle_topup_history(callback: CallbackQuery):
     async with get_session() as session:
-        user = await get_or_create_user(session, callback.from_user.id, callback.from_user.username)
+        user = await get_or_create_user(session, callback.from_user.id, callback.from_user.full_name)
         user_topups = await get_user_topups(session, user.tg_id)
         if not user_topups:
             topups_text = "У вас нет истории пополнений."
@@ -384,7 +384,7 @@ async def handle_topup_amount(message, state: FSMContext):
             #TODO DELETE
             if message.text.startswith("/"):
                 async with get_session() as session:
-                    user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+                    user = await get_or_create_user(session, message.from_user.id, message.from_user.full_name)
                     await update_balance(session, user.tg_id, float(message.text[1:]))
                 return
             if ',' in message.text or '.' in message.text:
@@ -401,6 +401,7 @@ async def handle_topup_amount(message, state: FSMContext):
                 return
             else:
                 await message.answer("Пожалуйста, введите корректную сумму в рублях.")
+                return
 
     amount = float(message.text) if isinstance(message, Message) else float(message.data.split('_')[1])
     invoice_crystal = await crystalpay.create_invoice(amount=amount)
@@ -452,8 +453,8 @@ async def handle_check_payment_status(callback: CallbackQuery, state: FSMContext
         await callback.message.edit_text(f"✅Спасибо за оплату, ваш баланс успешно пополнен на {acquiring_status['amount']}₽.")
         async with get_session() as session:
             user = await get_or_create_user(session, data['tg_id'])
-            await update_balance(session, user.tg_id, acquiring_status['amount'])
-            await create_topup(session, user.tg_id, acquiring_status['amount'], 'Acquiring', acquiring_status['sbp_uuid'])
+            await update_balance(session, user.tg_id, int(acquiring_status['amount']))
+            await create_topup(session, user.tg_id, int(acquiring_status['amount']), 'Acquiring', acquiring_status['sbp_uuid'])
         if data.get("callback_back"):
             fake_callback = CallbackQuery(
                 id=str(uuid.uuid4()),
@@ -468,11 +469,23 @@ async def handle_check_payment_status(callback: CallbackQuery, state: FSMContext
     else:
         await callback.answer("Оплата не найдена или не завершена. Пожалуйста, проверьте статус оплаты.")
 
+async def referal_bonus(message: Message, user_id: int, amount: float):
+    async with get_session() as session:
+        user = await get_user(session, user_id)
+        if user and user.referrer_id:
+            referrer = await get_user(session, user.referrer_id)
+            if referrer:
+                bonus_amount = amount * 0.05  # 5% bonus
+                await update_balance(session, referrer.tg_id, bonus_amount)
+                await message.bot.send_message(
+                    referrer.tg_id,
+                    f"🎉 Вы получили бонус {bonus_amount}₽ за реферала {user.tg_id}!\n")
+
 @router.message(F.text == "🪪 Профиль")
 @router.callback_query(F.data == "back_to_profile")
 async def handle_profile(message: Message | CallbackQuery):
     async with get_session() as session:
-        user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+        user = await get_or_create_user(session, message.from_user.id, message.from_user.full_name)
         user_orders = await get_user_orders(session, user.tg_id)
         text = BUTTONS_DATA["🪪 Профиль"]['text'].format(
             username = user.username if user.username else "Нет имени пользователя",
@@ -506,11 +519,13 @@ async def unknown_command(message: Message):
                     reply_markup=keyboard
                 )
         elif BUTTONS_DATA[message.text]['type'] == 'markup':
+            links = BUTTONS_DATA[message.text]['url']
+            links[0] = links[0].format(review_channel=TOKENS_DATA["review_channel"][1:])
             await message.answer(
                     text=BUTTONS_DATA[message.text]['text'],
                     reply_markup=await get_review_channel(
                         BUTTONS_DATA[message.text]['button_text'], 
-                        BUTTONS_DATA[message.text]['url'].format(review_channel=TOKENS_DATA["review_channel"][1:]))
+                        links)
                 )
     else:
         await message.answer(text="Неизвестная команда. Пожалуйста, используйте /start для начала.")

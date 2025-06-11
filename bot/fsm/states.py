@@ -7,6 +7,7 @@ class AdminStates(StatesGroup):
     unban_user_state = State()
     send_notification_state = State()
     waiting_for_image = State()
+    change_balance_state = State()
 
 class TopUpStates(StatesGroup):
     waiting_for_amount = State()

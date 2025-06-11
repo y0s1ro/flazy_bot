@@ -13,6 +13,10 @@ from bot.database import get_session, get_order
 from bot.fsm import ReviewStates
 from aiogram import Bot
 import os
+import emoji
+
+async def remove_emojis(text):
+    return emoji.replace_emoji(text, replace='')
 
 router = Router()
 
@@ -23,8 +27,8 @@ async def create_review_image(username: str, review_text: str, rating: int, prod
     
     # Load fonts (replace with actual font paths)
     try:
-        title_font = ImageFont.truetype("/Library/Fonts/Arial.ttf", 40)
-        text_font = ImageFont.truetype("/Library/Fonts/Arial.ttf", 30)
+        title_font = ImageFont.truetype("arial.ttf", 40)
+        text_font = ImageFont.truetype("arial.ttf", 30)
     except OSError:
         title_font = ImageFont.load_default()
         text_font = ImageFont.load_default()
@@ -33,14 +37,15 @@ async def create_review_image(username: str, review_text: str, rating: int, prod
     draw.text((50, 50), f"Отзыв от {username}", fill="yellow", font=title_font)
     # Paste star image(s) for rating
     try:
-        star_img = Image.open("/Users/yuriizaika/Documents/python/Projects/FlazyBot/bot/img/star1.png").convert("RGBA")
+        star_img = Image.open("bot//img//star1.png").convert("RGBA")
         #star_img = Image.open("bot/img/star1.png").convert("RGBA")
         star_size = 40
         star_img = star_img.resize((star_size, star_size))
         for i in range(rating):
             img.paste(star_img, (50 + i * (star_size + 5), 120), star_img)
+            
+        empty_star_img = Image.open("bot//img//star0.png").convert("RGBA")   
         for i in range(5 - rating):
-            empty_star_img = Image.open("/Users/yuriizaika/Documents/python/Projects/FlazyBot/bot/img/star0.png").convert("RGBA")
             empty_star_img = empty_star_img.resize((star_size, star_size))
             img.paste(empty_star_img, (50 + (rating + i) * (star_size + 5), 120), empty_star_img)
     except Exception as e:
@@ -48,8 +53,8 @@ async def create_review_image(username: str, review_text: str, rating: int, prod
     # Write product name after stars
     product_name = "/".join(product).strip()  # Join product tuple into a single string
     # Remove emoji from product name
-    product_name = re.sub(r'[\U00010000-\U0010ffff]', '', product_name).strip()
-    product_font = ImageFont.truetype("/Library/Fonts/Arial.ttf", 28) if text_font else ImageFont.load_default()
+    product_name = await remove_emojis(product_name)
+    product_font = ImageFont.truetype("arial.ttf", 28) if text_font else ImageFont.load_default()
     stars_width = 5 * (star_size + 5)
     draw.text((50 + stars_width + 20, 130), product_name.strip(), fill="white", font=product_font)
     # Wrap and add review text
@@ -59,7 +64,7 @@ async def create_review_image(username: str, review_text: str, rating: int, prod
     
     for _ in range(10):
         try:
-            text_font = ImageFont.truetype("/Library/Fonts/Arial.ttf", font_size)
+            text_font = ImageFont.truetype("arial.ttf", font_size)
         except:
             text_font = ImageFont.load_default()
         

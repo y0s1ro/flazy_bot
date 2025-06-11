@@ -99,7 +99,7 @@ async def build_product_keyboard(category_path_ids, is_auto_product=False, num_o
     builder.row(
         InlineKeyboardButton(
             text="🔙 Назад",
-            callback_data=f"c_{len(category_path_ids)-1}_{'_'.join(category_path_ids[:-1])}"
+            callback_data=f"c_{len(category_path_ids)-2}_{'_'.join(category_path_ids[:-2])}"
         )
     )
     return builder.as_markup()
@@ -113,7 +113,7 @@ async def build_region_keyboard(regions, callback_product):
         ))
     builder.row(InlineKeyboardButton(
         text="🔙 Назад",
-        callback_data=callback_product
+        callback_data=callback_product.replace("b", "p")
     ))
     return builder.as_markup()
 
