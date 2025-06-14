@@ -1,11 +1,12 @@
 import json 
+from bot.filter_categories import filter
 
 with open('bot/cfg/buttons.json', 'r', encoding='utf-8') as file:
     BUTTONS_DATA = json.load(file)
 
-with open('bot/cfg/categories.json', 'r', encoding='utf-8') as file:
+with open('bot/cfg/filtered_categories.json', 'r', encoding='utf-8') as file:
+    filter()  # Ensure categories are filtered before loading
     CATEGORIES_DATA = json.load(file)
-    CATEGORIES_DATA = {k: v for k, v in CATEGORIES_DATA.items() if CATEGORIES_DATA[k]["Status"] == "True"}  # Remove "Status" key
 
 with open('bot/cfg/cfg.json', 'r', encoding='utf-8') as file:
     TOKENS_DATA = json.load(file)

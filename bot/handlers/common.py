@@ -102,24 +102,60 @@ async def handle_category_selection(callback: CallbackQuery):
         await callback.message.delete()
     await callback.answer()
 
-@router.callback_query(F.data.startswith("catalog_prev"))
+@router.callback_query(F.data.startswith("prev_"))
 async def handle_catalog_prev(callback: CallbackQuery):
-    part = int(callback.data.split('_')[-1])
-    keyboard = await build_category_keyboard(CATEGORIES_DATA, part=part-1)
-    await callback.message.edit_text(
-        text="Выберите категорию:",
-        reply_markup=keyboard
-    )
+    data = callback.data.split('_')
+    part = int(data[1])
+    ids = data[3:]
+    category_data = CATEGORIES_DATA
+    if len(data) > 2:
+        keys = []
+        for id in ids:
+            for name in category_data:
+                if name.startswith(id):
+                    keys.append(name)
+                    category_data = category_data[name]
+                    break
+        level = int(data[2])
+        keyboard = await build_category_keyboard(category_data, level+1, '_'.join(ids), part=part-1)
+        await callback.message.edit_text(
+            text=f"Выберете из категории: {keys[-1].split('&*', 1)[1] if '&*' in keys[-1] else keys[-1].split('&', 1)[1]}",
+            reply_markup=keyboard
+        )
+    else:
+        keyboard = await build_category_keyboard(CATEGORIES_DATA, part=part-1)
+        await callback.message.edit_text(
+            text="Выберите категорию:",
+            reply_markup=keyboard
+        )
     await callback.answer()
 
-@router.callback_query(F.data.startswith("catalog_next"))
+@router.callback_query(F.data.startswith("next_"))
 async def handle_catalog_prev(callback: CallbackQuery):
-    part = int(callback.data.split('_')[-1])
-    keyboard = await build_category_keyboard(CATEGORIES_DATA, part=part+1)
-    await callback.message.edit_text(
-        text="Выберите категорию:",
-        reply_markup=keyboard
-    )
+    data = callback.data.split('_')
+    part = int(data[1])
+    ids = data[3:]
+    category_data = CATEGORIES_DATA
+    if len(data) > 2:
+        keys = []
+        for id in ids:
+            for name in category_data:
+                if name.startswith(id):
+                    keys.append(name)
+                    category_data = category_data[name]
+                    break
+        level = int(data[2])
+        keyboard = await build_category_keyboard(category_data, level+1, '_'.join(ids), part=part+1)
+        await callback.message.edit_text(
+            text=f"Выберете из категории: {keys[-1].split('&*', 1)[1] if '&*' in keys[-1] else keys[-1].split('&', 1)[1]}",
+            reply_markup=keyboard
+        )
+    else:
+        keyboard = await build_category_keyboard(CATEGORIES_DATA, part=part+1)
+        await callback.message.edit_text(
+            text="Выберите категорию:",
+            reply_markup=keyboard
+        )
     await callback.answer()
 
 @router.callback_query(F.data.startswith("p_"))

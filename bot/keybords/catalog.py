@@ -3,16 +3,18 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 async def build_category_keyboard(category_data, level=0, parent_id=None, part = 0):
 
+    one_page = False
     builder = InlineKeyboardBuilder()
     selected_categories = category_data
-    if part is not None and level == 0:
+    if len(category_data.keys()) > 9:
         selected_keys = sorted(category_data.keys(), key=lambda x: x.split('&', 1)[0])
         if (part+1)*9 > len(category_data.keys()):
             selected_keys = list(category_data.keys())[part*9:]
         else:
             selected_keys = list(category_data.keys())[part*9:(part+1)*9]
         selected_categories = {k: category_data[k] for k in selected_keys}
-
+    else:
+        one_page = True
     for key, item in sorted(selected_categories.items()):
         if key == "Status":
             continue
@@ -37,32 +39,32 @@ async def build_category_keyboard(category_data, level=0, parent_id=None, part =
                 callback_data=callback_data
             ))
     if part is not None:
-        if level == 0 and 0<part<len(category_data.keys())//9:
+        if not one_page and 0<part<len(category_data.keys())//9:
             # Add a button to show all categories if we are at the top level
             builder.row(
                 InlineKeyboardButton(
                     text="⬅️ Назад",
-                    callback_data=f"catalog_prev_{part}"
+                    callback_data=f"prev_{part}_{level}_{parent_id}" if parent_id else f"prev_{part}"
                 ),
                 InlineKeyboardButton(
                     text="Вперед ➡️",
-                    callback_data=f"catalog_next_{part}"
+                    callback_data=f"next_{part}_{level}_{parent_id}" if parent_id else f"next_{part}"
                 )
             )
-        elif level == 0 and part == 0:
+        elif not one_page and part == 0:
             # Add a button to show all categories if we are at the top level
             builder.row(
                 InlineKeyboardButton(
                     text="Вперед ➡️",
-                    callback_data=f"catalog_next_{part}"
+                    callback_data=f"next_{part}_{level}_{parent_id}" if parent_id else f"next_{part}"
                 )
             )
-        elif level == 0 and part>=len(category_data.keys())//9:
+        elif not one_page and part>=len(category_data.keys())//9:
             # If we are at the last part, don't show the "Next" button
             builder.row(
                 InlineKeyboardButton(
                     text="⬅️ Назад",
-                    callback_data=f"catalog_prev_{part}"
+                    callback_data=f"prev_{part}_{level}_{parent_id}" if parent_id else f"prev_{part}"
                 )
             )
     if level > 0 and not parent_id:
