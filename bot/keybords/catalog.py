@@ -38,38 +38,24 @@ async def build_category_keyboard(category_data, level=0, parent_id=None, part =
                 text=display_name,
                 callback_data=callback_data
             ))
-    if part is not None:
-        if not one_page and 0<part<len(category_data.keys())//9:
-            # Add a button to show all categories if we are at the top level
-            builder.row(
-                InlineKeyboardButton(
-                    text="⬅️ Назад",
-                    callback_data=f"prev_{part}_{level}_{parent_id}" if parent_id else f"prev_{part}"
-                ),
-                InlineKeyboardButton(
-                    text="Вперед ➡️",
-                    callback_data=f"next_{part}_{level}_{parent_id}" if parent_id else f"next_{part}"
-                )
+    builder.adjust(3)
+    if part is not None and not one_page:
+        builder.row(
+            InlineKeyboardButton(
+                text="⬅️ Назад",
+                callback_data=f"prev_{part}_{level}_{parent_id}" if parent_id else f"prev_{part}" if part>=len(category_data.keys())//9 else "no_action"
+            ),
+            InlineKeyboardButton(
+                text=f"{part+1}/{len(category_data.keys())//9+1}",
+                callback_data="no_action"
+            ),
+            InlineKeyboardButton(
+                text="Вперед ➡️",
+                callback_data=f"next_{part}_{level}_{parent_id}" if parent_id else f"next_{part}" if part == 0 else "no_action"
             )
-        elif not one_page and part == 0:
-            # Add a button to show all categories if we are at the top level
-            builder.row(
-                InlineKeyboardButton(
-                    text="Вперед ➡️",
-                    callback_data=f"next_{part}_{level}_{parent_id}" if parent_id else f"next_{part}"
-                )
-            )
-        elif not one_page and part>=len(category_data.keys())//9:
-            # If we are at the last part, don't show the "Next" button
-            builder.row(
-                InlineKeyboardButton(
-                    text="⬅️ Назад",
-                    callback_data=f"prev_{part}_{level}_{parent_id}" if parent_id else f"prev_{part}"
-                )
-            )
+        )
     if level > 0 and not parent_id:
         level = 0  # Reset level if no parent_id is provided
-    builder.adjust(3)
     if level > 0:
         # Add a back button if we are not at the top level
         prev_page = parent_id.rsplit("_", 1)[0]
