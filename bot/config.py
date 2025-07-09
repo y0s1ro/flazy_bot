@@ -13,3 +13,6 @@ with open('bot/cfg/cfg.json', 'r', encoding='utf-8') as file:
 
 with open('bot/commands/start/start_text.txt', 'r', encoding='utf-8') as file:
     START_MESSAGE = file.read()
+
+with open('bot/cfg/reffs.json', 'r', encoding='utf-8') as file:
+    REFFERALS_DATA = json.load(file)

@@ -1,8 +1,7 @@
 from aiogram import Router, F
 from aiogram.filters import Command
-from bot.config import START_MESSAGE, BUTTONS_DATA, CATEGORIES_DATA, TOKENS_DATA
+from bot.config import START_MESSAGE, BUTTONS_DATA, CATEGORIES_DATA, TOKENS_DATA, REFFERALS_DATA
 from aiogram.types import Message, FSInputFile, CallbackQuery
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from bot.keybords import build_category_keyboard, build_product_keyboard, get_menu, get_profile_buttons, get_topup_buttons, get_payments_button, get_back_button, build_region_keyboard, get_topup_history_buttons, get_orders_history_buttons, get_review_channel
 from bot.database import get_session, get_or_create_user, get_user_orders, get_user_topups, update_balance, create_topup, create_order, get_users_refferals, get_user, get_order, get_topup
@@ -518,7 +517,11 @@ async def referal_bonus(message: Message, user_id: int, amount: float):
         if user and user.referrer_id:
             referrer = await get_user(session, user.referrer_id)
             if referrer:
-                bonus_amount = amount * 0.05  # 5% bonus
+                if str(referrer.tg_id) in REFFERALS_DATA:
+                    bonus_percentage = REFFERALS_DATA[str(referrer.tg_id)].get("percentage")
+                else:
+                    bonus_percentage = 0.05  # Default bonus percentage if not specified
+                bonus_amount = amount * bonus_percentage
                 await update_balance(session, referrer.tg_id, bonus_amount)
                 await message.bot.send_message(
                     referrer.tg_id,

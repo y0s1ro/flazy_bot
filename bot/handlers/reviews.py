@@ -1,13 +1,9 @@
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
-import re
 from aiogram import Router, F
-from aiogram.filters import Command
 from bot.config import TOKENS_DATA
 from aiogram.types import Message, FSInputFile, CallbackQuery
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
-from aiogram import BaseMiddleware
 from bot.keybords import build_review_keyboard, build_review_rating_keyboard
 from bot.database import get_session, get_order
 from bot.fsm import ReviewStates
