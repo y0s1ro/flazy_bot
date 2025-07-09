@@ -174,7 +174,7 @@ cython_debug/
 .pypirc
 
 # Local configuration files
-.DS_Store/
+*.DS_Store/
 img/
 cfg/
 commands/
@@ -189,3 +189,5 @@ text/
 *.mdb
 *.accdb
 
+# Temporary files
+test.py
